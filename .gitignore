@@ -26,3 +26,7 @@ reports/
 # Archivos del sistema
 .DS_Store
 Thumbs.db
+
+# Archivos de pruebas locales
+bus.jpg
+yolov8n.pt

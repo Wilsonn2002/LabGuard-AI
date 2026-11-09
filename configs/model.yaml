@@ -5,7 +5,7 @@ model:
   filename: null
 
 inference:
-  device: cuda:0
+  device: cpu
   image_size: 512
   confidence_threshold: 0.25
   iou_threshold: 0.45
