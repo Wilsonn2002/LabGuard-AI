@@ -3,6 +3,14 @@ model:
   source: huggingface
   repository: null
   filename: null
+  local_path: null
+
+class_mapping:
+  lab_coat: lab_coat
+  protective_gloves: protective_gloves
+  safety_goggles: safety_goggles
+  lab_cap: lab_cap
+  face_mask: face_mask
 
 inference:
   device: cpu
