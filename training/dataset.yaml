@@ -1,11 +1,11 @@
-path: ../data/processed
-train: images/train
-val: images/val
-test: images/test
+train: ../data/labguard/images/train
+val: ../data/labguard/images/val
+test: ../data/labguard/images/test
 
 names:
-  0: lab_coat
-  1: protective_gloves
-  2: safety_goggles
-  3: lab_cap
-  4: face_mask
+  0: person
+  1: lab_coat
+  2: protective_gloves
+  3: safety_goggles
+  4: lab_cap
+  5: face_mask

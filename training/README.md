@@ -1,0 +1,138 @@
+# Entrenamiento del detector LabGuard
+
+Este directorio prepara el ajuste fino de YOLOv8n para detectar personas y EPP en imagenes de laboratorios reales. El entrenamiento se ejecuta en Google Colab; WSL se usa para organizar, validar y probar el dataset.
+
+## Clases
+
+Los IDs son parte del contrato del dataset y no deben reordenarse despues de anotar:
+
+| ID | Clase | Criterio de anotacion |
+|---:|---|---|
+| 0 | `person` | Caja de cada persona visible, incluyendo todo el cuerpo que aparezca en el encuadre. |
+| 1 | `lab_coat` | Prenda de laboratorio visible; la caja sigue la prenda, no todo el torso. |
+| 2 | `protective_gloves` | Una caja por guante visible. No etiquetar manos desnudas. |
+| 3 | `safety_goggles` | Gafas de proteccion; no etiquetar gafas de uso diario. |
+| 4 | `lab_cap` | Gorro de proteccion visible; no etiquetar cabello ni sombreros comunes. |
+| 5 | `face_mask` | Tapabocas o respirador que cubra la zona facial correspondiente. |
+
+Una caja se anota solo cuando el objeto es reconocible. Los objetos ausentes, totalmente ocluidos o ambiguos no reciben cajas. Todas las personas visibles deben etiquetarse aunque no usen EPP. Una imagen sin objetos validos necesita un archivo `.txt` vacio para dejar constancia de que fue revisada.
+
+## Organizacion
+
+`training/dataset.yaml` espera esta estructura, ignorada por Git:
+
+```text
+data/labguard/
+├── images/
+│   ├── train/
+│   ├── val/
+│   └── test/
+└── labels/
+    ├── train/
+    ├── val/
+    └── test/
+```
+
+Cada imagen y etiqueta comparte ruta relativa y nombre base. Por ejemplo, `images/train/lab-a/001.jpg` corresponde a `labels/train/lab-a/001.txt`.
+
+Cada linea de etiqueta usa el formato YOLO normalizado:
+
+```text
+class_id x_center y_center width height
+```
+
+Los cuatro valores geometricos deben estar entre 0 y 1, y la caja completa debe quedar dentro de la imagen. Se recomiendan imagenes JPEG o PNG de al menos 10 pixeles por dimension.
+
+## Recoleccion real
+
+1. Obtener autorizacion institucional y consentimiento informado antes de capturar personas identificables.
+2. Registrar variedad de laboratorios, camaras, distancias, iluminacion, posturas, tonos de piel, tallas y modelos de EPP realmente usados.
+3. Incluir escenas con EPP completo, incompleto, uso incorrecto, oclusiones parciales, varias personas y fondos sin personas.
+4. Evitar secuencias casi identicas. Si se extraen cuadros de video, conservar pocos cuadros separados temporalmente.
+5. Mantener fuera del repositorio las imagenes, identificadores, consentimientos y metadatos sensibles. Definir acceso, retencion y eliminacion.
+6. No aplicar desenfoque sobre gafas, mascarillas o gorros: alteraria precisamente las caracteristicas que debe aprender el modelo. Priorizar sesiones controladas y consentidas.
+
+La division debe realizarse por sesion, persona o laboratorio, no imagen por imagen. Ninguna persona ni rafaga de video debe aparecer en mas de un split. Como punto de partida, asignar aproximadamente 70 % de grupos a `train`, 15 % a `val` y 15 % a `test`, conservando diversidad y presencia de todas las clases en los tres conjuntos. `test` se mantiene cerrado hasta seleccionar el modelo final.
+
+Antes de entrenar, revisar una muestra de etiquetas entre dos personas. Corregir cajas sueltas, clases confundidas, objetos omitidos y criterios inconsistentes. El conteo por clase del validador ayuda a detectar desbalances, pero no sustituye la inspeccion visual.
+
+## Validacion en WSL
+
+Desde la raiz del repositorio:
+
+```bash
+python training/validate_dataset.py
+```
+
+El comando falla si cambia el orden de clases, falta algun split, una imagen no abre, falta su etiqueta, hay etiquetas huerfanas, IDs invalidos, campos no numericos, duplicados o cajas fuera de rango. Para una revision estructural rapida sin decodificar imagenes:
+
+```bash
+python training/validate_dataset.py --skip-image-check
+```
+
+El siguiente comando valida el dataset y muestra la configuracion, pero no entrena porque no incluye `--execute`:
+
+```bash
+python training/train.py --model yolov8n.pt
+```
+
+No usar la GPU MX230 para este ajuste fino. Mantener los pesos base, datasets y resultados fuera de Git.
+
+## Entrenamiento en Colab
+
+1. Crear un runtime con GPU desde `Runtime > Change runtime type > T4 GPU`.
+2. Guardar en Google Drive un ZIP cuyo contenido raiz sea `images/` y `labels/`, y una copia de `yolov8n.pt`.
+3. Clonar el repositorio y montar Drive. Sustituir `<URL_DEL_REPOSITORIO>` y las rutas de Drive:
+
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+```
+
+```bash
+!git clone <URL_DEL_REPOSITORIO> /content/LabGuard-AI
+%cd /content/LabGuard-AI
+!pip install -q ultralytics==8.4.208 PyYAML opencv-python-headless
+!mkdir -p data/labguard
+!unzip -q "/content/drive/MyDrive/LabGuard-AI/labguard-yolo.zip" -d data/labguard
+!cp "/content/drive/MyDrive/LabGuard-AI/yolov8n.pt" ./yolov8n.pt
+```
+
+4. Validar antes de reservar tiempo de GPU:
+
+```bash
+!python training/validate_dataset.py
+!python training/train.py --model yolov8n.pt
+```
+
+5. Entrenar y escribir checkpoints directamente en Drive:
+
+```bash
+!python training/train.py \
+  --model yolov8n.pt \
+  --epochs 100 \
+  --patience 20 \
+  --image-size 640 \
+  --batch 16 \
+  --device 0 \
+  --project "/content/drive/MyDrive/LabGuard-AI/runs" \
+  --name labguard_yolov8n_v1 \
+  --execute
+```
+
+Si Colab agota memoria, reducir primero `--batch` a 8 o 4. Para continuar una ejecucion interrumpida, indicar su `last.pt` y agregar `--resume --execute`.
+
+## Evaluacion
+
+Evaluar una sola vez sobre `test` despues de elegir hiperparametros con `val`:
+
+```bash
+!python training/evaluate.py \
+  --model "/content/drive/MyDrive/LabGuard-AI/runs/labguard_yolov8n_v1/weights/best.pt" \
+  --split test \
+  --device 0 \
+  --plots \
+  --output "/content/drive/MyDrive/LabGuard-AI/runs/labguard_yolov8n_v1/test_metrics.json"
+```
+
+El reporte incluye precision, recall, mAP50 y mAP50-95 globales y por clase. Ademas deben inspeccionarse falsos positivos y negativos por laboratorio, iluminacion y grupo de personas antes de reemplazar `models/best.pt` o integrar el modelo en Streamlit.

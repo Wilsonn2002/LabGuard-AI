@@ -16,6 +16,7 @@ __pycache__/
 # Datos y reportes
 data/
 reports/
+runs/
 
 # Modelos de inteligencia artificial
 *.pt
