@@ -1,0 +1,28 @@
+# Entornos virtuales
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Credenciales privadas
+.env
+.env.*
+!.env.example
+*.key
+
+# Datos y reportes
+data/
+reports/
+
+# Modelos de inteligencia artificial
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
