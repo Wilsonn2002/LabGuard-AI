@@ -1,0 +1,15 @@
+model:
+  architecture: yolov8n
+  source: huggingface
+  repository: null
+  filename: null
+
+inference:
+  device: cuda:0
+  image_size: 512
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+
+hardware:
+  cuda_architecture: sm_61
+  vram_gb: 2

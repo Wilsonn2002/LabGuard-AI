@@ -1,0 +1,9 @@
+required_ppe:
+  - lab_coat
+  - protective_gloves
+  - safety_goggles
+  - lab_cap
+  - face_mask
+
+compliance:
+  minimum_confidence: 0.25

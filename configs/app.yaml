@@ -1,0 +1,10 @@
+app:
+  title: LabGuard AI
+  language: es
+
+input:
+  allow_image_upload: true
+  allow_camera: true
+
+paths:
+  reports: reports
