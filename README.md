@@ -1,38 +1,141 @@
 # LabGuard AI
 
-Sistema inteligente de detección de elementos de protección personal (EPP) en laboratorios universitarios.
+LabGuard AI es un prototipo académico de visión artificial para revisar elementos de protección personal (EPP) visibles en fotografías de laboratorios. La aplicación procesa imágenes localmente, muestra detecciones orientativas y mantiene explícita la necesidad de supervisión humana.
 
-## Objetivo
-Desarrollar una aplicación que permita verificar visualmente los elementos de protección personal mediante inteligencia artificial.
+Esta documentación corresponde al estado auditado del commit `1929ba4`.
 
-## Elementos que queremos detectar
-- Bata de laboratorio
-- Guantes
-- Gafas de seguridad
-- Gorro
-- Tapabocas
+## Objetivos
+
+- Detectar EPP visible en fotografías mediante modelos YOLOv8 locales.
+- Presentar resultados comprensibles sin afirmar incumplimientos cuando la evidencia es insuficiente.
+- Comparar un análisis global con un análisis opcional por persona.
+- Preparar un flujo reproducible para validar datos, ajustar YOLOv8n y evaluar nuevos checkpoints.
+- Servir como base académica para mejorar detección, privacidad y trazabilidad.
+
+LabGuard AI no reemplaza una inspección profesional, no determina por sí solo el uso correcto del EPP y no debe utilizarse para sanciones automáticas.
+
+## Estado funcional
+
+Actualmente está implementado:
+
+- Carga de una fotografía JPG, JPEG o PNG desde Streamlit.
+- Inferencia local y en CPU con `models/best.pt`.
+- Detección efectiva en la interfaz de guantes, gafas de seguridad y tapabocas.
+- Dibujo de cajas, etiquetas y confianza mediante OpenCV, con conteos mostrados en Streamlit.
+- Análisis global de todas las detecciones EPP soportadas que devuelve el modelo para la imagen.
+- Análisis opcional por persona usando `yolov8n.pt`, recortes individuales y deduplicación heurística.
+- Controles de confianza y tamaño de inferencia.
+- Validación de datasets YOLO, script de fine-tuning y evaluación por clase.
+- 39 pruebas automatizadas.
+
+No están implementados la cámara, el análisis de video, el seguimiento temporal, la generación de reportes de usuario, la descarga automática de modelos, la detección facial ni advertencias visuales basadas en evidencia facial. La bata y el gorro todavía aparecen como no evaluables en la interfaz actual.
+
+Consulta [Estado actual](docs/ESTADO_ACTUAL.md) para el alcance verificado y sus limitaciones.
 
 ## Tecnologías
-- Python
-- YOLOv8
-- Hugging Face
-- PyTorch
-- CUDA
-- Streamlit
-- OpenCV
 
-## Hardware
-NVIDIA GeForce MX230 con 2 GB de VRAM y CUDA SM 6.1.
+| Tecnología | Uso actual |
+|---|---|
+| Python 3.12 o superior | Aplicación, scripts y pruebas |
+| Streamlit | Interfaz web local |
+| Ultralytics YOLOv8 | Inferencia, entrenamiento y evaluación |
+| PyTorch CPU | Ejecución de checkpoints `.pt` en la aplicación |
+| OpenCV | Decodificación y anotación de imágenes BGR |
+| NumPy | Representación y recortes de imágenes |
+| PyYAML | Lectura de configuración y datasets |
+| `unittest` | Suite automatizada |
 
-## Funcionalidades previstas
-- Análisis de imágenes
-- Detección mediante cámara en tiempo real
-- Identificación de elementos visibles
-- Alertas de posibles elementos faltantes
-- Generación de reportes
+Las dependencias declaradas no están fijadas a versiones exactas. El entorno auditado utilizó Ultralytics `8.4.208`; antes de actualizar dependencias se deben ejecutar todas las pruebas.
 
-## Estado
-Proyecto en desarrollo.
+## Arquitectura resumida
 
-## Advertencia
-La aplicación es una herramienta académica de apoyo y no sustituye la supervisión humana de seguridad.
+```text
+Streamlit
+   ├── análisis global ───────> YOLO EPP ──> reglas globales
+   └── análisis por persona ──> YOLO COCO person
+                                └── recorte por persona ──> YOLO EPP
+
+OpenCV <── decodificación, cajas, etiquetas y composición visual
+```
+
+El análisis global agrupa detecciones de toda la imagen. El análisis individual detecta personas, ejecuta el modelo EPP en cada recorte y traduce las cajas a coordenadas globales. Esta asociación es heurística y no equivale a seguimiento ni estimación de pose.
+
+Consulta [Arquitectura](docs/ARQUITECTURA.md) para el flujo completo.
+
+## Estructura
+
+```text
+LabGuard-AI/
+├── app.py                         # Entrada de Streamlit
+├── configs/
+│   ├── model.yaml                 # Configuración activa de modelos e inferencia
+│   ├── app.yaml                   # Configuración reservada, todavía no cargada
+│   └── compliance.yaml            # Configuración reservada, todavía no cargada
+├── docs/                          # Entrega técnica y continuidad
+├── models/
+│   └── best.pt                    # Peso EPP local, ignorado por Git
+├── src/labguard_ai/
+│   ├── compliance/                # Reglas globales básicas
+│   ├── core/                      # Tipos de dominio
+│   ├── detection/                 # Adaptadores YOLO EPP y person
+│   ├── processing/                # Flujos global, por persona y futuro video
+│   ├── reporting/                 # Contrato futuro, sin generador concreto
+│   └── ui/                        # Interfaz y utilidades OpenCV
+├── tests/                         # 39 pruebas
+├── training/                      # Dataset, validación, entrenamiento y evaluación
+├── pyproject.toml
+└── yolov8n.pt                     # Peso COCO local, ignorado por Git
+```
+
+Los pesos, `data/`, `reports/` y el archivo local `bus.jpg` están excluidos de Git. Otras fotografías no se ignoran de forma general y podrían quedar staged por accidente: revisa siempre `git status` y nunca añadas imágenes privadas. Un clon nuevo necesita obtener los dos modelos por separado.
+
+## Guía rápida
+
+La instalación completa para Windows y WSL2 está en [Instalación](docs/INSTALACION.md).
+
+```bash
+git clone https://github.com/Wilsonn2002/LabGuard-AI.git
+cd LabGuard-AI
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -e .
+```
+
+Después de obtener y verificar `yolov8n.pt` y `models/best.pt` según [Modelos](docs/MODELOS.md), inicia la aplicación:
+
+```bash
+python -m streamlit run app.py
+```
+
+Abre la URL local indicada por Streamlit, carga una fotografía y ajusta la confianza si es necesario. El análisis individual es más lento porque ejecuta una inferencia EPP por persona.
+
+Ejecuta la suite desde la raíz:
+
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py'
+```
+
+## Documentación
+
+- [Instalación en Windows y WSL2](docs/INSTALACION.md)
+- [Arquitectura](docs/ARQUITECTURA.md)
+- [Modelos y checksums](docs/MODELOS.md)
+- [Estado actual y limitaciones](docs/ESTADO_ACTUAL.md)
+- [Plan de desarrollo](docs/PLAN_DESARROLLO.md)
+- [Guía de colaboración y OpenCode](docs/GUIA_COLABORACION.md)
+- [Preparación y entrenamiento](training/README.md)
+
+## Privacidad y seguridad
+
+- No subas a GitHub fotografías de personas, datasets privados, consentimientos ni resultados que permitan identificar participantes.
+- Obtén autorización institucional y consentimiento antes de procesar fotografías reales.
+- Mantén los datos sensibles en almacenamiento con acceso restringido y define su periodo de conservación.
+- No guardes contraseñas, tokens, claves, archivos `.env` ni credenciales de servicios en el repositorio, issues, pull requests o conversaciones con asistentes.
+- Verifica origen y SHA-256 antes de cargar pesos `.pt`; los checkpoints de PyTorch deben tratarse como código potencialmente ejecutable.
+- Si una credencial se expone, revócala inmediatamente y limpia el historial siguiendo el procedimiento institucional.
+
+## Licencias
+
+Este repositorio no contiene un archivo `LICENSE` en el commit documentado. Antes de redistribuir o desplegar el proyecto se debe definir una licencia propia compatible con todas las obligaciones de terceros y revisar las licencias de Ultralytics, PyTorch, OpenCV, Streamlit y de cada modelo. Consulta [Modelos](docs/MODELOS.md).
