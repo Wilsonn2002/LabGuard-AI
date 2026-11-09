@@ -1,16 +1,16 @@
 model:
   architecture: yolov8n
   source: huggingface
-  repository: null
-  filename: null
-  local_path: null
+  repository: Tanishjain9/yolov8n-ppe-detection-6classes
+  filename: best.pt
+  revision: a2c1a97646ade96e48adda74781dd455d0456c40
+  sha256: 07172ef3ae9e256c40a1fb0ce3eefe5547d90170645aa73dded0fffc382cdb31
+  local_path: models/best.pt
 
 class_mapping:
-  lab_coat: lab_coat
-  protective_gloves: protective_gloves
-  safety_goggles: safety_goggles
-  lab_cap: lab_cap
-  face_mask: face_mask
+  Gloves: protective_gloves
+  goggles: safety_goggles
+  mask: face_mask
 
 inference:
   device: cpu
