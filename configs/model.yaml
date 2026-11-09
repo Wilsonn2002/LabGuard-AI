@@ -12,6 +12,12 @@ class_mapping:
   goggles: safety_goggles
   mask: face_mask
 
+person_detection:
+  local_path: yolov8n.pt
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  maximum_people: 50
+
 inference:
   device: cpu
   image_size: 512

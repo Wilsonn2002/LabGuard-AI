@@ -24,6 +24,10 @@ class ModelConfiguration:
     image_size: int
     confidence_threshold: float
     iou_threshold: float
+    person_model_path: Path | None = None
+    person_confidence_threshold: float = 0.25
+    person_iou_threshold: float = 0.45
+    maximum_people: int = 50
 
 
 def _read_yaml(config_path: Path) -> Any:
@@ -63,6 +67,9 @@ def load_model_configuration(
     model = _section(data, "model")
     inference = _section(data, "inference")
     raw_mapping = _section(data, "class_mapping")
+    person_detection = data.get("person_detection", {})
+    if not isinstance(person_detection, Mapping):
+        raise ModelConfigurationError("person_detection debe ser un mapa YAML")
 
     local_path = model.get("local_path")
     if not isinstance(local_path, str) or not local_path.strip():
@@ -82,6 +89,11 @@ def load_model_configuration(
         image_size = int(inference["image_size"])
         confidence_threshold = float(inference["confidence_threshold"])
         iou_threshold = float(inference["iou_threshold"])
+        person_confidence_threshold = float(
+            person_detection.get("confidence_threshold", 0.25)
+        )
+        person_iou_threshold = float(person_detection.get("iou_threshold", 0.45))
+        maximum_people = int(person_detection.get("maximum_people", 50))
     except (KeyError, TypeError, ValueError) as error:
         raise ModelConfigurationError("Los parametros de inferencia o clases no son validos") from error
 
@@ -95,6 +107,21 @@ def load_model_configuration(
         raise ModelConfigurationError("inference.confidence_threshold debe estar entre 0 y 1")
     if not 0.0 <= iou_threshold <= 1.0:
         raise ModelConfigurationError("inference.iou_threshold debe estar entre 0 y 1")
+    if not 0.0 <= person_confidence_threshold <= 1.0:
+        raise ModelConfigurationError(
+            "person_detection.confidence_threshold debe estar entre 0 y 1"
+        )
+    if not 0.0 <= person_iou_threshold <= 1.0:
+        raise ModelConfigurationError("person_detection.iou_threshold debe estar entre 0 y 1")
+    if maximum_people <= 0:
+        raise ModelConfigurationError("person_detection.maximum_people debe ser positivo")
+
+    person_local_path = person_detection.get("local_path", "yolov8n.pt")
+    if not isinstance(person_local_path, str) or not person_local_path.strip():
+        raise ModelConfigurationError("person_detection.local_path debe indicar un archivo .pt")
+    resolved_person_model_path = Path(person_local_path).expanduser()
+    if not resolved_person_model_path.is_absolute():
+        resolved_person_model_path = root / resolved_person_model_path
 
     return ModelConfiguration(
         model_path=resolved_model_path.resolve(),
@@ -105,4 +132,8 @@ def load_model_configuration(
         image_size=image_size,
         confidence_threshold=confidence_threshold,
         iou_threshold=iou_threshold,
+        person_model_path=resolved_person_model_path.resolve(),
+        person_confidence_threshold=person_confidence_threshold,
+        person_iou_threshold=person_iou_threshold,
+        maximum_people=maximum_people,
     )

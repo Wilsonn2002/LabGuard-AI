@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from labguard_ai.core import AnalysisResult, Detection, PpeType
+from labguard_ai.core import AnalysisResult, Detection, PersonAnalysis, PpeType
 
 PPE_LABELS = {
     PpeType.LAB_COAT: "Bata de laboratorio",
@@ -314,6 +314,71 @@ def annotate_image(
 
     for warning in warnings:
         draw_warning_triangle(annotated, warning.anchor)
+
+    return annotated
+
+
+def annotate_people(
+    image: np.ndarray,
+    people: Iterable[PersonAnalysis],
+) -> np.ndarray:
+    """Dibuja cajas e identificadores temporales sin cubrir la zona del rostro."""
+    annotated = image.copy()
+    height, width = annotated.shape[:2]
+    color = (220, 170, 55)
+    occupied_labels: list[tuple[int, int, int, int]] = []
+
+    for analysis in people:
+        x1, y1, x2, y2 = analysis.person.bounding_box
+        x1 = min(max(x1, 0), max(width - 1, 0))
+        x2 = min(max(x2, 0), max(width - 1, 0))
+        y1 = min(max(y1, 0), max(height - 1, 0))
+        y2 = min(max(y2, 0), max(height - 1, 0))
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 1)
+
+        label = analysis.person.person_id
+        (text_width, text_height), baseline = cv2.getTextSize(
+            label,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            1,
+        )
+        label_width = text_width + 8
+        label_height = text_height + baseline + 6
+        label_left = min(max(x1, 0), max(width - label_width, 0))
+        preferred_top = min(max(y2 - label_height, 0), max(height - label_height, 0))
+        candidate_tops = [preferred_top]
+        candidate_tops.extend(
+            max(0, preferred_top - offset * (label_height + 2)) for offset in range(1, 5)
+        )
+
+        rectangle = None
+        for label_top in candidate_tops:
+            candidate = (
+                label_left,
+                label_top,
+                label_left + label_width,
+                label_top + label_height,
+            )
+            if not any(_rectangles_overlap(candidate, other) for other in occupied_labels):
+                rectangle = candidate
+                break
+        if rectangle is None:
+            continue
+
+        occupied_labels.append(rectangle)
+        left, top, right, bottom = rectangle
+        cv2.rectangle(annotated, (left, top), (right, bottom), color, -1)
+        cv2.putText(
+            annotated,
+            label,
+            (left + 4, bottom - baseline - 3),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            (12, 21, 28),
+            1,
+            cv2.LINE_AA,
+        )
 
     return annotated
 

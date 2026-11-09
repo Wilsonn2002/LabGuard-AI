@@ -18,9 +18,9 @@ class StreamlitAppTest(unittest.TestCase):
         self.assertEqual(sliders["Umbral de confianza"].max, 0.60)
         self.assertEqual(sliders["Tamano de inferencia"].min, 512)
         self.assertEqual(sliders["Tamano de inferencia"].max, 640)
-        self.assertEqual(len(app.toggle), 1)
-        self.assertEqual(app.toggle[0].label, "Mostrar advertencias visuales")
-        self.assertFalse(app.toggle[0].value)
+        toggles = {toggle.label: toggle for toggle in app.toggle}
+        self.assertFalse(toggles["Mostrar advertencias visuales"].value)
+        self.assertFalse(toggles["Analisis individual por persona"].value)
 
 
 if __name__ == "__main__":

@@ -3,11 +3,13 @@
 from pathlib import Path
 
 from labguard_ai.config import ModelConfiguration, load_model_configuration
-from labguard_ai.core import PpeType
-from labguard_ai.detection import YoloPpeDetector
+from labguard_ai.core import EvaluationStatus, PersonAnalysisResult, PpeType
+from labguard_ai.detection import YoloPersonDetector, YoloPpeDetector
 from labguard_ai.processing.image import ImageAnalyzer
+from labguard_ai.processing.person import PersonPpeAnalyzer
 from labguard_ai.ui.images import (
     annotate_image,
+    annotate_people,
     count_detections,
     decode_uploaded_image,
     ppe_label,
@@ -40,6 +42,39 @@ def build_analyzer(
     return ImageAnalyzer(detector)
 
 
+def build_person_analyzer(
+    configuration: ModelConfiguration,
+    *,
+    confidence_threshold: float,
+    image_size: int,
+) -> PersonPpeAnalyzer:
+    """Construye los detectores COCO y EPP usados en el flujo por persona."""
+    if configuration.person_model_path is None:
+        raise FileNotFoundError("No se configuro el modelo local de personas")
+
+    person_detector = YoloPersonDetector(
+        configuration.person_model_path,
+        device=configuration.device,
+        confidence_threshold=configuration.person_confidence_threshold,
+        iou_threshold=configuration.person_iou_threshold,
+        image_size=image_size,
+        maximum_detections=configuration.maximum_people,
+    )
+    ppe_detector = YoloPpeDetector(
+        configuration.model_path,
+        configuration.class_mapping,
+        device=configuration.device,
+        confidence_threshold=confidence_threshold,
+        iou_threshold=configuration.iou_threshold,
+        image_size=image_size,
+    )
+    return PersonPpeAnalyzer(
+        person_detector,
+        ppe_detector,
+        frozenset(configuration.class_mapping.values()),
+    )
+
+
 def _analyzer_key(
     configuration: ModelConfiguration,
     confidence_threshold: float,
@@ -53,6 +88,24 @@ def _analyzer_key(
         confidence_threshold,
         configuration.iou_threshold,
         image_size,
+    )
+
+
+def _person_analyzer_key(
+    configuration: ModelConfiguration,
+    confidence_threshold: float,
+    image_size: int,
+) -> tuple[object, ...]:
+    return (
+        "individual",
+        str(configuration.person_model_path),
+        str(configuration.model_path),
+        confidence_threshold,
+        configuration.person_confidence_threshold,
+        configuration.person_iou_threshold,
+        configuration.iou_threshold,
+        image_size,
+        configuration.maximum_people,
     )
 
 
@@ -96,6 +149,50 @@ def _inject_styles(st) -> None:
 def _items_text(items) -> str:
     labels = [ppe_label(item) for item in items]
     return ", ".join(labels) if labels else "Ninguno"
+
+
+def _status_text(status: EvaluationStatus) -> str:
+    return {
+        EvaluationStatus.DETECTED: "Detectado",
+        EvaluationStatus.UNDETERMINED: "No determinado",
+        EvaluationStatus.NOT_EVALUABLE: "No evaluable",
+    }[status]
+
+
+def _render_person_results(st, result: PersonAnalysisResult) -> None:
+    st.subheader("Resultado individual")
+    if not result.people:
+        st.warning("No se detectaron personas con el modelo COCO en esta fotografia.")
+        return
+
+    st.metric("Personas detectadas", len(result.people))
+    st.caption(
+        "Los identificadores son temporales y se asignan de izquierda a derecha en cada fotografia."
+    )
+    for analysis in result.people:
+        with st.container(border=True):
+            st.markdown(
+                f"### {analysis.person.person_id} · persona {analysis.person.confidence:.1%}"
+            )
+            status_columns = st.columns(len(analysis.statuses))
+            for column, item_status in zip(
+                status_columns,
+                analysis.statuses,
+                strict=True,
+            ):
+                column.caption(ppe_label(item_status.item))
+                column.write(f"**{_status_text(item_status.status)}**")
+
+            if analysis.detections:
+                for detection in analysis.detections:
+                    st.write(
+                        f"{ppe_label(detection.item)}: {detection.confidence:.1%}"
+                    )
+            else:
+                st.caption(
+                    "No se asignaron detecciones EPP a esta persona; el resultado queda "
+                    "como No determinado para las clases evaluables."
+                )
 
 
 def run() -> None:
@@ -168,6 +265,14 @@ def run() -> None:
             "Advertencias activadas. El pipeline actual aun no localiza rostros, por lo que no "
             "se inventaran posiciones ni se mostraran iconos de ausencia."
         )
+    individual_analysis_enabled = st.toggle(
+        "Analisis individual por persona",
+        value=False,
+        help=(
+            "Detecta personas con yolov8n.pt y ejecuta el modelo EPP dentro de cada recorte. "
+            "Puede ser mas lento en CPU."
+        ),
+    )
     st.caption(
         f"Procesamiento en CPU | confianza {confidence_threshold:.2f} | imagen {image_size}px"
     )
@@ -188,29 +293,53 @@ def run() -> None:
         return
 
     try:
-        key = _analyzer_key(configuration, confidence_threshold, image_size)
-        if st.session_state.get("labguard_analyzer_key") != key:
-            st.session_state["labguard_analyzer"] = build_analyzer(
-                configuration,
-                confidence_threshold=confidence_threshold,
-                image_size=image_size,
-            )
-            st.session_state["labguard_analyzer_key"] = key
-        analyzer = st.session_state["labguard_analyzer"]
-
+        result = None
+        person_result = None
         with st.spinner("Analizando elementos de proteccion personal..."):
-            result = analyzer.analyze(original)
-            # No hay advertencias hasta integrar evidencia facial fiable por persona.
-            warning_markers = ()
-            annotated = annotate_image(
-                original,
-                result.detections,
-                warnings=warning_markers if warnings_enabled else (),
-            )
-    except FileNotFoundError:
+            if individual_analysis_enabled:
+                key = _person_analyzer_key(
+                    configuration,
+                    confidence_threshold,
+                    image_size,
+                )
+                if st.session_state.get("labguard_person_analyzer_key") != key:
+                    st.session_state["labguard_person_analyzer"] = build_person_analyzer(
+                        configuration,
+                        confidence_threshold=confidence_threshold,
+                        image_size=image_size,
+                    )
+                    st.session_state["labguard_person_analyzer_key"] = key
+                analyzer = st.session_state["labguard_person_analyzer"]
+                person_result = analyzer.analyze(original)
+                individual_detections = tuple(
+                    detection
+                    for analysis in person_result.people
+                    for detection in analysis.detections
+                )
+                annotated = annotate_image(original, individual_detections)
+                annotated = annotate_people(annotated, person_result.people)
+            else:
+                key = _analyzer_key(configuration, confidence_threshold, image_size)
+                if st.session_state.get("labguard_analyzer_key") != key:
+                    st.session_state["labguard_analyzer"] = build_analyzer(
+                        configuration,
+                        confidence_threshold=confidence_threshold,
+                        image_size=image_size,
+                    )
+                    st.session_state["labguard_analyzer_key"] = key
+                analyzer = st.session_state["labguard_analyzer"]
+                result = analyzer.analyze(original)
+                # No hay advertencias hasta integrar evidencia facial fiable por persona.
+                warning_markers = ()
+                annotated = annotate_image(
+                    original,
+                    result.detections,
+                    warnings=warning_markers if warnings_enabled else (),
+                )
+    except FileNotFoundError as error:
         st.error(
-            f"No se encontro el modelo en {configuration.model_path}. "
-            "Verifica que models/best.pt exista antes de analizar imagenes."
+            f"No se pudo cargar un modelo local: {error}. "
+            "Verifica models/best.pt y yolov8n.pt antes de analizar imagenes."
         )
         return
     except Exception as error:
@@ -226,6 +355,14 @@ def run() -> None:
         st.image(annotated, channels="BGR", use_container_width=True)
 
     st.markdown('<hr class="labguard-rule">', unsafe_allow_html=True)
+    if person_result is not None:
+        _render_person_results(st, person_result)
+        st.caption(
+            "No determinado significa que el EPP no pudo confirmarse para esa persona. "
+            "No equivale a ausencia ni incumplimiento."
+        )
+        return
+
     st.subheader("Resultado del analisis")
 
     supported_items = tuple(

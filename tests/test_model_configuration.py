@@ -21,6 +21,12 @@ def valid_configuration() -> dict:
             "goggles": "safety_goggles",
             "mask": "face_mask",
         },
+        "person_detection": {
+            "local_path": "yolov8n.pt",
+            "confidence_threshold": 0.30,
+            "iou_threshold": 0.40,
+            "maximum_people": 25,
+        },
         "inference": {
             "device": "cpu",
             "image_size": 512,
@@ -41,6 +47,9 @@ class ModelConfigurationTest(unittest.TestCase):
         self.assertEqual(configuration.model_path, (root / "models" / "best.pt").resolve())
         self.assertEqual(configuration.device, "cpu")
         self.assertEqual(configuration.image_size, 512)
+        self.assertEqual(configuration.person_model_path, (root / "yolov8n.pt").resolve())
+        self.assertEqual(configuration.person_confidence_threshold, 0.30)
+        self.assertEqual(configuration.maximum_people, 25)
         self.assertEqual(
             configuration.class_mapping,
             {

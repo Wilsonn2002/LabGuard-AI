@@ -5,10 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import cv2
-import numpy as np
-
 from labguard_ai.core import Detection, PpeType
+from labguard_ai.detection.utils import as_numpy, prepare_opencv_image
 
 ClassKey = str | int
 ModelLoader = Callable[[str], Any]
@@ -70,39 +68,6 @@ class YoloPpeDetector:
 
         return YOLO(model_path)
 
-    @staticmethod
-    def _prepare_image(image: object) -> np.ndarray:
-        if not isinstance(image, np.ndarray):
-            raise TypeError("La imagen debe ser una matriz NumPy de OpenCV")
-        if image.size == 0:
-            raise ValueError("La imagen no puede estar vacia")
-        if image.dtype != np.uint8:
-            raise TypeError("La imagen debe usar el tipo uint8")
-
-        image = np.ascontiguousarray(image)
-        if image.ndim == 2:
-            return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        if image.ndim != 3:
-            raise ValueError("La imagen debe tener dos o tres dimensiones")
-        if image.shape[2] == 1:
-            return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        if image.shape[2] == 4:
-            return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-        if image.shape[2] != 3:
-            raise ValueError("La imagen debe tener uno, tres o cuatro canales")
-        return image
-
-    @staticmethod
-    def _as_numpy(value: Any) -> np.ndarray:
-        """Convierte tensores de PyTorch o valores simulados sin importar torch."""
-        if hasattr(value, "detach"):
-            value = value.detach()
-        if hasattr(value, "cpu"):
-            value = value.cpu()
-        if hasattr(value, "numpy"):
-            value = value.numpy()
-        return np.asarray(value)
-
     def _get_model(self) -> Any:
         if self._model is None:
             self._model = self._model_loader(str(self.model_path))
@@ -131,7 +96,7 @@ class YoloPpeDetector:
 
     def detect(self, image: object) -> list[Detection]:
         """Detecta y convierte las cajas YOLO correspondientes a EPP conocido."""
-        prepared_image = self._prepare_image(image)
+        prepared_image = prepare_opencv_image(image)
         results = self._get_model().predict(
             source=prepared_image,
             device=self.device,
@@ -147,9 +112,9 @@ class YoloPpeDetector:
             if boxes is None:
                 continue
 
-            class_ids = self._as_numpy(boxes.cls).reshape(-1)
-            confidences = self._as_numpy(boxes.conf).reshape(-1)
-            coordinates = self._as_numpy(boxes.xyxy).reshape(-1, 4)
+            class_ids = as_numpy(boxes.cls).reshape(-1)
+            confidences = as_numpy(boxes.conf).reshape(-1)
+            coordinates = as_numpy(boxes.xyxy).reshape(-1, 4)
 
             for raw_class_id, raw_confidence, raw_box in zip(
                 class_ids, confidences, coordinates, strict=True

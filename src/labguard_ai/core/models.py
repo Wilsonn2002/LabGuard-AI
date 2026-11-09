@@ -14,6 +14,14 @@ class PpeType(StrEnum):
     FACE_MASK = "face_mask"
 
 
+class EvaluationStatus(StrEnum):
+    """Estado prudente de un EPP para una persona detectada."""
+
+    DETECTED = "detected"
+    UNDETERMINED = "undetermined"
+    NOT_EVALUABLE = "not_evaluable"
+
+
 @dataclass(frozen=True, slots=True)
 class Detection:
     """Deteccion individual producida por el modelo."""
@@ -21,6 +29,39 @@ class Detection:
     item: PpeType
     confidence: float
     bounding_box: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class PersonDetection:
+    """Persona COCO identificada temporalmente dentro de una fotografia."""
+
+    person_id: str
+    confidence: float
+    bounding_box: tuple[int, int, int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class PersonPpeStatus:
+    """Estado de un tipo de EPP para una persona concreta."""
+
+    item: PpeType
+    status: EvaluationStatus
+
+
+@dataclass(frozen=True, slots=True)
+class PersonAnalysis:
+    """Detecciones y estados asociados a una sola persona."""
+
+    person: PersonDetection
+    detections: tuple[Detection, ...]
+    statuses: tuple[PersonPpeStatus, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PersonAnalysisResult:
+    """Resultado independiente por cada persona visible en una fotografia."""
+
+    people: tuple[PersonAnalysis, ...]
 
 
 @dataclass(frozen=True, slots=True)
