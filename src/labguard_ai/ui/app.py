@@ -258,8 +258,74 @@ def run() -> None:
             type=["mp4", "avi", "mov"],
             help="Formatos admitidos: MP4, AVI y MOV."
         )
-        if video_file is not None:
-            st.warning("El motor de procesamiento de video está en construcción para la próxima iteración.")
+        # 1. Botón para interrumpir el procesamiento
+            stop_button = st.button("⏹️ Detener Procesamiento", key="stop_video")
+            
+            # 2. Guardar video temporalmente para que OpenCV pueda leerlo
+            tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+            tfile.write(video_file.read())
+            cap = cv2.VideoCapture(tfile.name)
+            
+            # 3. Contenedor visual que se actualizará frame a frame
+            frame_placeholder = st.empty()
+            st.caption("⚙️ Procesando frame a frame. El rendimiento depende de tu procesador (CPU).")
+            
+            try:
+                # 4. Inicializar o recuperar el modelo (reutilizando el caché existente)
+                if individual_analysis_enabled:
+                    key = _person_analyzer_key(configuration, confidence_threshold, image_size)
+                    if st.session_state.get("labguard_person_analyzer_key") != key:
+                        st.session_state["labguard_person_analyzer"] = build_person_analyzer(
+                            configuration, confidence_threshold=confidence_threshold, image_size=image_size
+                        )
+                        st.session_state["labguard_person_analyzer_key"] = key
+                    analyzer = st.session_state["labguard_person_analyzer"]
+                else:
+                    key = _analyzer_key(configuration, confidence_threshold, image_size)
+                    if st.session_state.get("labguard_analyzer_key") != key:
+                        st.session_state["labguard_analyzer"] = build_analyzer(
+                            configuration, confidence_threshold=confidence_threshold, image_size=image_size
+                        )
+                        st.session_state["labguard_analyzer_key"] = key
+                    analyzer = st.session_state["labguard_analyzer"]
+                
+                # 5. Bucle de procesamiento de video
+                while cap.isOpened() and not stop_button:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break  # Fin del video
+                        
+                    # Analizar el frame actual
+                    if individual_analysis_enabled:
+                        person_result = analyzer.analyze(frame)
+                        individual_detections = tuple(
+                            det for analysis in person_result.people for det in analysis.detections
+                        )
+                        annotated_frame = annotate_image(frame, individual_detections)
+                        annotated_frame = annotate_people(annotated_frame, person_result.people)
+                    else:
+                        result = analyzer.analyze(frame)
+                        annotated_frame = annotate_image(
+                            frame, 
+                            result.detections, 
+                            warnings=() if not warnings_enabled else () # Preparado para futuras advertencias
+                        )
+                    
+                    # Convertir BGR a RGB para que Streamlit lo muestre con los colores correctos
+                    annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Actualizar la pantalla
+                    frame_placeholder.image(annotated_frame_rgb, use_container_width=True)
+                    
+                cap.release()
+                
+                if stop_button:
+                    st.warning("Procesamiento detenido por el usuario.")
+                else:
+                    st.success("✅ Procesamiento de video finalizado.")
+                    
+            except Exception as e:
+                st.error(f"Error procesando el video: {e}")
 
     with tab_imagen:
         uploaded_file = st.file_uploader(
