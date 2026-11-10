@@ -150,3 +150,73 @@ streamlit run src/labguard_ai/ui/app.py
 ## Licencias
 
 Este repositorio no contiene un archivo `LICENSE` en el commit documentado. Antes de redistribuir o desplegar el proyecto se debe definir una licencia propia compatible con todas las obligaciones de terceros y revisar las licencias de Ultralytics, PyTorch, OpenCV, Streamlit y de cada modelo. Consulta [Modelos](docs/MODELOS.md).
+
+---
+
+## Proyecto académico: LabGuard AI
+
+LabGuard AI es un prototipo de visión artificial desarrollado para apoyar
+la revisión de cinco elementos de protección personal en laboratorios:
+
+- Bata de laboratorio.
+- Guantes de protección.
+- Gafas de seguridad.
+- Gorro de laboratorio.
+- Tapabocas.
+
+### Integrantes
+
+- Wilson Silva Nova
+- Douglas Duvan Bonilla
+- Johan Beltran Acevedo
+
+### Tecnologías
+
+- Python y Streamlit para la aplicación web.
+- YOLOv8 para detección de objetos.
+- Hugging Face como fuente del modelo EPP.
+- Roboflow para la preparación de datasets.
+- CUDA Toolkit para las pruebas de procesamiento en GPU.
+
+### Datos utilizados
+
+Se prepararon dos conjuntos de imágenes:
+
+| Dataset | Entrenamiento | Validación | Pruebas | Total |
+|---|---:|---:|---:|---:|
+| Dataset 1 | 2103 | 70 | 50 | 2223 |
+| Dataset 2 | 180 | 95 | 95 | 370 |
+| **Total** | **2283** | **165** | **145** | **2593** |
+
+Se realizaron revisiones de anotaciones y auditorías de consistencia
+para identificar posibles etiquetas incorrectas.
+
+### Modelo de inteligencia artificial
+
+Modelo: YOLOv8n PPE Detection, publicado por Tanishjain9 en Hugging Face.
+
+Repositorio:
+https://huggingface.co/Tanishjain9/yolov8n-ppe-detection-6classes
+
+- Parámetros verificados: 2.691.378.
+- Arquitectura: YOLOv8 Nano.
+- Clases originales: 6.
+- Clases integradas para inferencia EPP: guantes, gafas y tapabocas.
+- Modelo auxiliar: YOLOv8n para detección de personas.
+
+Las clases de bata y gorro forman parte de los datasets preparados
+y del alcance previsto del proyecto. Su reconocimiento requiere
+un modelo específicamente entrenado y validado para estas categorías.
+
+### Pruebas y CUDA
+
+- 64 pruebas automatizadas aprobadas.
+- GPU utilizada para pruebas CUDA: NVIDIA GeForce MX230.
+- CUDA Toolkit 12.9.
+- Kernel CUDA ejecutado correctamente con cinco hilos.
+- La inferencia actual de la aplicación se realiza en CPU.
+
+### Video de presentación
+
+Enlace: pendiente de publicación.
+
