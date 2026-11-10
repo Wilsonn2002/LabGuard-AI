@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LabGuard Annotation Review</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e9f1f4;
+      --muted: #8fa5ae;
+      --panel: #10202a;
+      --panel-2: #152b36;
+      --line: #2b4855;
+      --accent: #61e5bd;
+      --warning: #ffc857;
+      --danger: #ff6b72;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #071219; color: var(--ink); font: 14px/1.4 system-ui, sans-serif; }
+    header { display: flex; align-items: center; gap: 18px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: #0b1921; }
+    header h1 { margin: 0; font-size: 18px; letter-spacing: .02em; }
+    header p { margin: 0; color: var(--muted); }
+    header .audit-open { width: auto; margin-left: auto; border-color: var(--warning); }
+    .layout { display: grid; grid-template-columns: 280px minmax(440px, 1fr) 330px; height: calc(100vh - 58px); }
+    aside, main { min-height: 0; }
+    aside { background: var(--panel); padding: 14px; overflow: auto; }
+    aside.left { border-right: 1px solid var(--line); }
+    aside.right { border-left: 1px solid var(--line); }
+    main { display: flex; flex-direction: column; min-width: 0; background: #061017; }
+    label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    input, select, button { width: 100%; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+    button { cursor: pointer; font-weight: 700; }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: #17614f; border-color: #2da987; }
+    button.danger { background: #5e242b; border-color: #a83f4a; }
+    button.active { outline: 2px solid var(--accent); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .toolbar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+    .toolbar button { width: auto; min-width: 100px; }
+    .canvas-shell { flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; overflow: auto; }
+    canvas { max-width: 100%; max-height: 100%; background: #020609; box-shadow: 0 0 0 1px #35505b; touch-action: none; cursor: crosshair; }
+    #imageSelect { height: calc(100vh - 310px); min-height: 260px; }
+    .status { padding: 8px 10px; border-top: 1px solid var(--line); color: var(--muted); background: var(--panel); }
+    .status.error { color: #ff9da2; }
+    .status.ok { color: var(--accent); }
+    .badge { display: inline-block; margin: 3px 3px 3px 0; padding: 3px 7px; border-radius: 999px; background: #24414d; font-size: 12px; }
+    .badge.warning { color: #17130a; background: var(--warning); font-weight: 800; }
+    .callout { margin: 12px 0; padding: 10px; border-left: 3px solid var(--warning); background: #292515; color: #ffe6a5; }
+    .box-list { display: grid; gap: 5px; margin: 8px 0 14px; }
+    .box-list button { text-align: left; font-weight: 500; }
+    .box-list button.selected { border-color: var(--accent); background: #193d38; }
+    .coords { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .coords label { margin-top: 4px; }
+    .meta { padding: 8px; background: #0b1820; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+    .history { margin-top: 10px; max-height: 180px; overflow: auto; color: var(--muted); font-size: 12px; }
+    .history article { border-top: 1px solid var(--line); padding: 6px 0; }
+    .audit-panel { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; background: #071219; }
+    .audit-head { display: flex; align-items: center; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #0b1921; }
+    .audit-head h2 { margin: 0; }
+    .audit-head button { width: auto; margin-left: auto; }
+    .audit-body { display: grid; grid-template-columns: 280px 1fr; flex: 1; min-height: 0; }
+    .audit-filters { padding: 14px; overflow: auto; background: var(--panel); border-right: 1px solid var(--line); }
+    .audit-results { padding: 16px; overflow: auto; }
+    .audit-summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin-bottom: 14px; }
+    .audit-summary div { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+    .audit-summary strong { display: block; font-size: 20px; }
+    .audit-list { display: grid; gap: 10px; }
+    .finding { padding: 13px; border: 1px solid var(--line); border-left-width: 5px; border-radius: 7px; background: var(--panel); }
+    .finding.high { border-left-color: var(--danger); }
+    .finding.medium { border-left-color: var(--warning); }
+    .finding.low { border-left-color: #6ba7c2; }
+    .finding-head { display: flex; align-items: start; gap: 10px; }
+    .finding-head h3 { margin: 0; flex: 1; font-size: 15px; overflow-wrap: anywhere; }
+    .finding-head .badge { margin: 0; }
+    .finding button { width: auto; margin-top: 10px; }
+    .signal { margin-top: 8px; padding: 8px; border-radius: 5px; background: #0a1820; color: var(--muted); }
+    .signal strong { color: var(--ink); }
+    .peer { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+    @media (max-width: 900px) {
+      header { align-items: flex-start; flex-direction: column; gap: 4px; }
+      header .audit-open { margin-left: 0; }
+      .layout { display: block; height: auto; }
+      aside.left, aside.right { border: 0; border-bottom: 1px solid var(--line); }
+      #imageSelect { height: 220px; min-height: 0; }
+      main { height: 70vh; min-height: 480px; }
+      .toolbar { flex-wrap: wrap; }
+      .toolbar button { flex: 1 1 130px; }
+      .audit-body { display: block; overflow: auto; }
+      .audit-filters, .audit-results { overflow: visible; border: 0; }
+      .audit-summary { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>LabGuard · Revisión YOLO</h1>
+    <p>Copia local de trabajo. Los originales y el staging auditado permanecen intactos.</p>
+    <button id="auditOpen" class="audit-open">Auditar anotaciones</button>
+  </header>
+  <div class="layout">
+    <aside class="left">
+      <label for="splitFilter">Split original</label>
+      <select id="splitFilter">
+        <option value="all">Todos</option><option value="train">train</option>
+        <option value="val">val</option><option value="test">test</option>
+      </select>
+      <label for="classFilter">Clase presente</label>
+      <select id="classFilter"><option value="">Todas</option></select>
+      <label><input id="provisionalFilter" type="checkbox" style="width:auto"> Solo gafas provisionales</label>
+      <label for="searchFilter">Buscar archivo</label>
+      <input id="searchFilter" placeholder="video, frame o hash">
+      <button id="refreshButton" style="margin-top:8px">Aplicar filtros</button>
+      <p id="resultCount" class="meta">0 imágenes</p>
+      <div id="outsideFilterNotice" class="callout" hidden></div>
+      <select id="imageSelect" size="20" aria-label="Imágenes"></select>
+      <button id="exportButton" class="primary" style="margin-top:10px">Exportar etiquetas válidas</button>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <button id="selectMode" class="active">Seleccionar / mover</button>
+        <button id="addMode">Agregar caja</button>
+        <button id="previousButton">Anterior</button>
+        <button id="nextButton">Siguiente</button>
+        <button id="saveButton" class="primary">Guardar cambios</button>
+      </div>
+      <div class="canvas-shell"><canvas id="canvas"></canvas></div>
+      <div id="status" class="status">Selecciona una imagen.</div>
+    </main>
+
+    <aside class="right">
+      <h2 style="margin-top:0">Anotaciones</h2>
+      <div id="imageMeta" class="meta">Sin imagen seleccionada.</div>
+      <div class="callout">
+        Para batas parcialmente visibles y gorros de laboratorio, dibuja una caja ceñida únicamente a la porción visible. No inventes la parte ocluida.
+        Las gafas provisionales muestran si su clase original era <code>Safety_Glasses</code> o <code>goggles</code>.
+      </div>
+      <label for="newClass">Clase para cajas nuevas</label>
+      <select id="newClass"></select>
+      <div id="boxList" class="box-list"></div>
+      <section id="inspector" hidden>
+        <label for="selectedClass">Clase seleccionada</label>
+        <select id="selectedClass"></select>
+        <div class="coords">
+          <div><label for="coordX">x centro</label><input id="coordX" type="number" min="0" max="1" step="0.0001"></div>
+          <div><label for="coordY">y centro</label><input id="coordY" type="number" min="0" max="1" step="0.0001"></div>
+          <div><label for="coordW">ancho</label><input id="coordW" type="number" min="0.0001" max="1" step="0.0001"></div>
+          <div><label for="coordH">alto</label><input id="coordH" type="number" min="0.0001" max="1" step="0.0001"></div>
+        </div>
+        <div id="originMeta" class="meta" style="margin-top:10px"></div>
+        <button id="deleteButton" class="danger" style="margin-top:10px">Eliminar anotación</button>
+      </section>
+      <h3>Historial de esta imagen</h3>
+      <div id="history" class="history">Sin correcciones guardadas.</div>
+    </aside>
+  </div>
+
+  <section id="auditPanel" class="audit-panel" hidden>
+    <div class="audit-head">
+      <div>
+        <h2>Auditoría de consistencia</h2>
+        <span style="color:var(--muted)">Frames canónicos, variantes aumentadas y vecinos del mismo video</span>
+      </div>
+      <button id="auditClose">Volver al editor</button>
+    </div>
+    <div class="audit-body">
+      <div class="audit-filters">
+        <div class="callout">
+          Son sugerencias heurísticas sobre estados guardados, no detecciones. Una etiqueta ausente no demuestra ausencia de EPP. Revisa la imagen y decide manualmente; nunca se copian cajas.
+        </div>
+        <label for="auditPriority">Prioridad</label>
+        <select id="auditPriority">
+          <option value="all">Todas</option><option value="high">Alta</option>
+          <option value="medium">Media</option><option value="low">Baja</option>
+        </select>
+        <label for="auditClass">Clase potencialmente incompleta</label>
+        <select id="auditClass"></select>
+        <label for="auditRelation">Evidencia</label>
+        <select id="auditRelation">
+          <option value="all">Toda</option>
+          <option value="augmented_variant">Variantes del mismo frame</option>
+          <option value="video_neighbor">Vecinos del mismo video</option>
+        </select>
+        <label for="auditSplit">Split original</label>
+        <select id="auditSplit">
+          <option value="all">Todos</option><option value="train">train</option>
+          <option value="val">val</option><option value="test">test</option>
+        </select>
+        <label for="auditQuery">Buscar video, frame o archivo</label>
+        <input id="auditQuery" placeholder="nombre o variante">
+        <button id="auditRefresh" class="primary" style="margin-top:10px">Consultar hallazgos</button>
+      </div>
+      <div class="audit-results">
+        <div id="auditSummary" class="audit-summary"></div>
+        <div id="auditNotice" class="meta" style="margin-bottom:14px"></div>
+        <div id="auditError" class="status error" style="margin-bottom:14px" hidden></div>
+        <div id="auditList" class="audit-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const CLASSES = ['person','lab_coat','protective_gloves','safety_goggles','lab_cap','face_mask'];
+    const COLORS = ['#dcc63e','#32d583','#55b9ff','#ffbe55','#c77dff','#ff6b8a'];
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let image = new Image();
+    let images = [], current = null, annotations = [], selectedId = null;
+    let mode = 'select', dirty = false, drag = null, draft = null;
+    let auditLoaded = false, lastLoadError = '';
+
+    function optionMarkup(includeAll=false) {
+      return (includeAll ? '<option value="">Todas</option>' : '') +
+        CLASSES.map((name,id) => `<option value="${id}">${id} ${name}</option>`).join('');
+    }
+    document.getElementById('classFilter').innerHTML = optionMarkup(true);
+    document.getElementById('newClass').innerHTML = optionMarkup();
+    document.getElementById('selectedClass').innerHTML = optionMarkup();
+    document.getElementById('auditClass').innerHTML = optionMarkup(true);
+
+    async function api(url, options={}) {
+      const response = await fetch(url, {headers:{'Content-Type':'application/json'}, ...options});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      return payload;
+    }
+    function setStatus(message, kind='') {
+      const node = document.getElementById('status');
+      node.textContent = message; node.className = `status ${kind}`;
+    }
+    function setDirty(value=true) {
+      dirty = value;
+      document.getElementById('saveButton').textContent = value ? 'Guardar cambios *' : 'Guardar cambios';
+    }
+    function confirmDiscard() { return !dirty || confirm('Hay cambios sin guardar. ¿Descartarlos?'); }
+
+    function syncImageSelector(payload) {
+      const select=document.getElementById('imageSelect');
+      select.querySelectorAll('option[data-outside-filter]').forEach(option=>option.remove());
+      let option=Array.from(select.options).find(item=>item.value===payload.image_id);
+      const outside=!option;
+      if(outside) {
+        option=document.createElement('option');
+        option.value=payload.image_id;
+        option.dataset.outsideFilter='true';
+        option.textContent=`[${payload.image.target_split}] ${payload.image.source_image.split('/').pop()} · fuera del filtro`;
+        select.insertBefore(option,select.firstChild);
+      }
+      select.value=payload.image_id;
+      const notice=document.getElementById('outsideFilterNotice');
+      notice.hidden=!outside;
+      notice.textContent=outside?'Imagen abierta desde auditoría. No pertenece a la lista filtrada actual; puedes editarla sin cambiar sus filtros ni su split.':'';
+    }
+
+    function loadCanvasImage(imageId,revision) {
+      return new Promise((resolve,reject)=>{
+        const candidate=new Image();
+        candidate.decoding='async';
+        candidate.onload=async()=>{
+          try {
+            if(!candidate.naturalWidth||!candidate.naturalHeight)throw new Error('La imagen no tiene dimensiones válidas.');
+            if(candidate.decode)await candidate.decode();
+            resolve(candidate);
+          } catch(error) { reject(error); }
+        };
+        candidate.onerror=()=>reject(new Error('No se pudo cargar o decodificar la fotografía desde /api/image.'));
+        candidate.src=`/api/image?id=${encodeURIComponent(imageId)}&r=${revision}`;
+      });
+    }
+
+    async function refreshImages(preferredId=null) {
+      if(!confirmDiscard())return false;
+      const params = new URLSearchParams({
+        split: document.getElementById('splitFilter').value,
+        query: document.getElementById('searchFilter').value,
+        provisional: document.getElementById('provisionalFilter').checked ? '1' : '0',
+        limit: '3000'
+      });
+      const classId = document.getElementById('classFilter').value;
+      if (classId !== '') params.set('class_id', classId);
+      const result = await api(`/api/images?${params}`);
+      images = result.items;
+      const select = document.getElementById('imageSelect');
+      select.innerHTML = images.map(item => {
+        const marker = item.provisional_count ? ' ◈' : '';
+        return `<option value="${item.image_id}">[${item.split}] ${escapeHtml(item.source_image.split('/').pop())}${marker}</option>`;
+      }).join('');
+      document.getElementById('resultCount').textContent = `${result.total} imágenes · ${images.length} mostradas`;
+      document.getElementById('outsideFilterNotice').hidden=true;
+      const target = preferredId || images[0]?.image_id;
+      if (target) { select.value = target; await loadImage(target,true); }
+      else { current = null; annotations = []; draw(); setStatus('No hay imágenes con estos filtros.'); }
+      return true;
+    }
+
+    async function loadImage(imageId,discardConfirmed=false) {
+      if (!discardConfirmed&&!confirmDiscard()) {if(current)syncImageSelector(current);return null;}
+      lastLoadError='';
+      try {
+        const payload = await api(`/api/annotation?id=${encodeURIComponent(imageId)}`);
+        if(payload.image_id!==imageId)throw new Error('La API devolvió un image_id diferente al hallazgo solicitado.');
+        const loadedImage = await loadCanvasImage(imageId,payload.revision);
+        const historyResult = await api(`/api/history?id=${encodeURIComponent(imageId)}`);
+        image=loadedImage;
+        current = payload;
+        annotations = structuredClone(payload.annotations);
+        selectedId = annotations[0]?.id || null;
+        setDirty(false);
+        canvas.width=image.naturalWidth;
+        canvas.height=image.naturalHeight;
+        syncImageSelector(payload);
+        renderPanels();
+        renderHistory(historyResult.events);
+        draw();
+        setStatus(`Revisión ${payload.revision} · ${annotations.length} cajas`, 'ok');
+        return true;
+      } catch (error) {
+        lastLoadError=error.message||String(error);
+        setStatus(`No se pudo abrir la imagen: ${lastLoadError}`, 'error');
+        return false;
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+    }
+    function selected() { return annotations.find(annotation => annotation.id === selectedId) || null; }
+    function edges(annotation) {
+      const [x,y,w,h] = annotation.bbox;
+      return {l:x-w/2,t:y-h/2,r:x+w/2,b:y+h/2};
+    }
+    function bboxFromEdges(box) {
+      return [(box.l+box.r)/2,(box.t+box.b)/2,box.r-box.l,box.b-box.t];
+    }
+    function point(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x:clamp((event.clientX-rect.left)/rect.width,0,1),
+        y:clamp((event.clientY-rect.top)/rect.height,0,1)
+      };
+    }
+    function draw() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (image.complete && image.naturalWidth) ctx.drawImage(image,0,0,canvas.width,canvas.height);
+      annotations.forEach(annotation => drawAnnotation(annotation, annotation.id === selectedId));
+      if (draft) {
+        const box = normalEdges(draft.start, draft.current);
+        ctx.save(); ctx.strokeStyle=COLORS[Number(document.getElementById('newClass').value)];
+        ctx.setLineDash([8,5]); ctx.lineWidth=2;
+        ctx.strokeRect(box.l*canvas.width,box.t*canvas.height,(box.r-box.l)*canvas.width,(box.b-box.t)*canvas.height);
+        ctx.restore();
+      }
+    }
+    function drawAnnotation(annotation, active) {
+      const box=edges(annotation), color=COLORS[annotation.class_id];
+      const x=box.l*canvas.width,y=box.t*canvas.height,w=(box.r-box.l)*canvas.width,h=(box.b-box.t)*canvas.height;
+      ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=active?3:2; if(active) ctx.setLineDash([10,4]);
+      ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
+      const origin = annotation.origin?.provisional_merge ? ` ← ${annotation.origin.source_class_name}` : '';
+      const label=`${annotation.class_id} ${CLASSES[annotation.class_id]}${origin}`;
+      ctx.font='13px system-ui'; const tw=ctx.measureText(label).width+10;
+      ctx.fillStyle=color; ctx.fillRect(x,Math.max(0,y-20),tw,20); ctx.fillStyle='#061017';
+      ctx.fillText(label,x+5,Math.max(14,y-6));
+      if(active) handles(box).forEach(handle => {ctx.fillStyle='#fff';ctx.fillRect(handle.x*canvas.width-5,handle.y*canvas.height-5,10,10);ctx.strokeRect(handle.x*canvas.width-5,handle.y*canvas.height-5,10,10);});
+      ctx.restore();
+    }
+    function handles(box) { return [{name:'nw',x:box.l,y:box.t},{name:'ne',x:box.r,y:box.t},{name:'se',x:box.r,y:box.b},{name:'sw',x:box.l,y:box.b}]; }
+    function normalEdges(a,b) { return {l:Math.min(a.x,b.x),t:Math.min(a.y,b.y),r:Math.max(a.x,b.x),b:Math.max(a.y,b.y)}; }
+    function hitHandle(position, annotation) {
+      if(!annotation) return null;
+      const threshold=10/Math.max(canvas.getBoundingClientRect().width,1);
+      return handles(edges(annotation)).find(handle => Math.hypot(handle.x-position.x,handle.y-position.y)<=threshold)?.name || null;
+    }
+    function hitBox(position) {
+      return [...annotations].reverse().find(annotation => {const b=edges(annotation);return position.x>=b.l&&position.x<=b.r&&position.y>=b.t&&position.y<=b.b;});
+    }
+
+    canvas.addEventListener('pointerdown', event => {
+      if(!current) return; const p=point(event); canvas.setPointerCapture(event.pointerId);
+      if(mode==='add') { draft={start:p,current:p}; drag={type:'add'}; draw(); return; }
+      const active=selected(), handle=hitHandle(p,active);
+      if(handle) drag={type:'resize',handle,start:p,box:{...edges(active)}};
+      else {
+        const hit=hitBox(p); selectedId=hit?.id || null; renderPanels(); draw();
+        if(hit) drag={type:'move',start:p,bbox:[...hit.bbox]};
+      }
+    });
+    canvas.addEventListener('pointermove', event => {
+      if(!drag) return; const p=point(event);
+      if(drag.type==='add') { draft.current=p; draw(); return; }
+      const annotation=selected(); if(!annotation) return;
+      if(drag.type==='move') {
+        const dx=p.x-drag.start.x,dy=p.y-drag.start.y,[x,y,w,h]=drag.bbox;
+        annotation.bbox=[clamp(x+dx,w/2,1-w/2),clamp(y+dy,h/2,1-h/2),w,h];
+      } else {
+        const box={...drag.box}, min=.002;
+        if(drag.handle.includes('w')) box.l=clamp(p.x,0,box.r-min);
+        if(drag.handle.includes('e')) box.r=clamp(p.x,box.l+min,1);
+        if(drag.handle.includes('n')) box.t=clamp(p.y,0,box.b-min);
+        if(drag.handle.includes('s')) box.b=clamp(p.y,box.t+min,1);
+        annotation.bbox=bboxFromEdges(box);
+      }
+      setDirty(); updateInspector(); draw();
+    });
+    canvas.addEventListener('pointerup', event => {
+      if(drag?.type==='add' && draft) {
+        const box=normalEdges(draft.start,draft.current);
+        if(box.r-box.l>.002 && box.b-box.t>.002) {
+          const classId=Number(document.getElementById('newClass').value);
+          const annotation={id:`new-${crypto.randomUUID()}`,class_id:classId,class_name:CLASSES[classId],bbox:bboxFromEdges(box),origin:{kind:'manual-pending'}};
+          annotations.push(annotation); selectedId=annotation.id; setDirty(); renderPanels();
+        }
+      }
+      drag=null; draft=null; draw();
+    });
+    canvas.addEventListener('pointercancel', () => {drag=null;draft=null;draw();});
+    function clamp(value,min,max){return Math.min(max,Math.max(min,value));}
+
+    function renderPanels() {
+      if(!current) return;
+      document.getElementById('imageMeta').innerHTML = `<strong>${escapeHtml(current.image.source_image)}</strong><br>`+
+        `<span class="badge">${current.image.target_split}</span><span class="badge">rev ${current.revision}</span>`+
+        `<br>${escapeHtml(current.image.video_origin || 'sin video')} · frame ${current.image.video_frame ?? 'n/a'}`;
+      const list=document.getElementById('boxList');
+      list.innerHTML=annotations.map((annotation,index)=>`<button data-id="${annotation.id}" class="${annotation.id===selectedId?'selected':''}">`+
+        `${index+1}. ${annotation.class_id} ${CLASSES[annotation.class_id]}`+
+        `${annotation.origin?.provisional_merge?' · '+escapeHtml(annotation.origin.source_class_name):''}</button>`).join('') || '<p>Sin anotaciones.</p>';
+      list.querySelectorAll('button').forEach(button=>button.onclick=()=>{selectedId=button.dataset.id;renderPanels();draw();});
+      updateInspector();
+    }
+    function updateInspector() {
+      const annotation=selected(), inspector=document.getElementById('inspector');
+      inspector.hidden=!annotation; if(!annotation) return;
+      document.getElementById('selectedClass').value=annotation.class_id;
+      ['coordX','coordY','coordW','coordH'].forEach((id,index)=>document.getElementById(id).value=annotation.bbox[index].toFixed(6));
+      const origin=annotation.origin || {};
+      document.getElementById('originMeta').innerHTML = origin.kind==='roboflow_import'
+        ? `<strong>Origen:</strong> ${escapeHtml(origin.source_class_name)} (ID ${origin.source_class_id})<br>`+
+          `<span class="badge ${origin.provisional_merge?'warning':''}">${origin.provisional_merge?'FUSIÓN PROVISIONAL':'importada'}</span>`+
+          `<br>${escapeHtml(origin.source_format)} · línea ${origin.line_number}`
+        : '<strong>Origen:</strong> caja agregada manualmente';
+    }
+    document.getElementById('selectedClass').addEventListener('change', event=>{const a=selected();if(!a)return;a.class_id=Number(event.target.value);a.class_name=CLASSES[a.class_id];setDirty();renderPanels();draw();});
+    ['coordX','coordY','coordW','coordH'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{
+      const a=selected();if(!a)return;const values=['coordX','coordY','coordW','coordH'].map(field=>Number(document.getElementById(field).value));
+      const [x,y,w,h]=values;if(!values.every(Number.isFinite)||w<=0||h<=0||x-w/2<0||x+w/2>1||y-h/2<0||y+h/2>1){setStatus('Coordenadas inválidas: la caja debe quedar dentro de la imagen.','error');updateInspector();return;}
+      a.bbox=values;setDirty();draw();setStatus('Coordenadas actualizadas; falta guardar.');
+    }));
+    document.getElementById('deleteButton').onclick=()=>{if(!selected())return;if(!confirm('¿Eliminar esta anotación?'))return;annotations=annotations.filter(a=>a.id!==selectedId);selectedId=annotations[0]?.id||null;setDirty();renderPanels();draw();};
+
+    async function save() {
+      if(!current||!dirty)return;
+      try {
+        const payload=await api('/api/save',{method:'POST',body:JSON.stringify({image_id:current.image_id,expected_revision:current.revision,annotations:annotations.map(a=>({id:a.id,class_id:a.class_id,bbox:a.bbox}))})});
+        current=payload;annotations=structuredClone(payload.annotations);selectedId=annotations.find(a=>a.id===selectedId)?.id||annotations[0]?.id||null;auditLoaded=false;setDirty(false);renderPanels();draw();await loadHistory();await refreshImages(current.image_id);setStatus('Cambios guardados y etiqueta YOLO validada.','ok');
+      } catch(error){setStatus(error.message,'error');}
+    }
+    function renderHistory(events){document.getElementById('history').innerHTML=events.slice().reverse().map(event=>`<article>rev ${event.revision_before} → ${event.revision_after}<br>${escapeHtml(event.timestamp_utc)}<br>+${event.changes.created.length} ~${event.changes.updated.length} −${event.changes.deleted.length}</article>`).join('')||'Sin correcciones guardadas.';}
+    async function loadHistory(){if(!current)return;const result=await api(`/api/history?id=${encodeURIComponent(current.image_id)}`);renderHistory(result.events);}
+
+    function countSignature(counts) {
+      return Object.entries(counts).filter(([,count])=>count>0).map(([id,count])=>`${CLASSES[Number(id)]}: ${count}`).join(', ') || 'sin cajas';
+    }
+    async function loadAudit() {
+      const params = new URLSearchParams({
+        priority:document.getElementById('auditPriority').value,
+        relation:document.getElementById('auditRelation').value,
+        split:document.getElementById('auditSplit').value,
+        query:document.getElementById('auditQuery').value,
+        limit:'1000'
+      });
+      const classId=document.getElementById('auditClass').value;
+      if(classId!=='')params.set('class_id',classId);
+      document.getElementById('auditList').innerHTML='<div class="meta">Comparando estados actuales…</div>';
+      document.getElementById('auditError').hidden=true;
+      try {
+        const result=await api(`/api/audit?${params}`);
+        auditLoaded=true;
+        const groups=result.groups, summary=result.summary;
+        document.getElementById('auditSummary').innerHTML=
+          `<div><strong>${summary.filtered_findings}</strong>filtrados de ${summary.total_findings}</div>`+
+          `<div><strong>${summary.priority_counts.high}</strong>prioridad alta</div>`+
+          `<div><strong>${groups.variant_discrepancy_groups}</strong>frames con variantes discrepantes</div>`+
+          `<div><strong>${groups.video_neighbor_comparisons}</strong>comparaciones temporales</div>`;
+        document.getElementById('auditNotice').textContent=result.notice;
+        document.getElementById('auditList').innerHTML=result.items.map(finding=>{
+          const priority={high:'ALTA',medium:'MEDIA',low:'BAJA'}[finding.priority];
+          const signals=finding.signals.map(signal=>{
+            const relation=signal.relation==='augmented_variant'?'Variantes del mismo frame':'Frames vecinos del video';
+            const peers=signal.related_images.map(peer=>`<span class="peer">↳ ${escapeHtml(peer.source_image.split('/').pop())} · ${escapeHtml(countSignature(peer.class_counts))}</span>`).join('');
+            return `<div class="signal"><strong>${relation}</strong> · observado ${signal.observed_count}, referencia ${signal.peer_count}<br>${escapeHtml(signal.group_key)}${peers}</div>`;
+          }).join('');
+          return `<article class="finding ${finding.priority}"><div class="finding-head"><h3>${escapeHtml(finding.source_image)}</h3>`+
+            `<span class="badge">${priority} · ${finding.score}</span></div>`+
+            `<p><strong>${finding.class_id} ${finding.class_name}</strong>: ${finding.observed_count===0?'no hay cajas':'conteo '+finding.observed_count}. Posible anotación incompleta; requiere inspección visual.</p>`+
+            `<span class="badge">${finding.split}</span><span class="badge">rev ${finding.revision}</span>`+
+            `${finding.roboflow_variant?`<span class="badge">variante ${escapeHtml(finding.roboflow_variant.slice(0,8))}</span>`:''}${signals}`+
+            `<button class="primary audit-review" data-image-id="${finding.image_id}">Revisar y decidir en el editor</button></article>`;
+        }).join('')||'<div class="meta">No hay hallazgos con estos filtros.</div>';
+        document.querySelectorAll('.audit-review').forEach(button=>button.onclick=async()=>{
+          const loaded=await loadImage(button.dataset.imageId);
+          if(loaded===null)return;
+          if(!loaded){const error=document.getElementById('auditError');error.textContent=`No se pudo abrir el hallazgo: ${lastLoadError}`;error.hidden=false;error.scrollIntoView({block:'nearest'});return;}
+          document.getElementById('auditPanel').hidden=true;
+          setStatus('Hallazgo abierto para revisión humana. Ninguna caja fue copiada automáticamente.');
+        });
+      } catch(error) {
+        document.getElementById('auditList').innerHTML=`<div class="status error">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    document.getElementById('saveButton').onclick=save;
+    document.getElementById('refreshButton').onclick=()=>refreshImages();
+    document.getElementById('imageSelect').onchange=event=>loadImage(event.target.value);
+    document.getElementById('selectMode').onclick=()=>setMode('select');
+    document.getElementById('addMode').onclick=()=>setMode('add');
+    function setMode(value){mode=value;document.getElementById('selectMode').classList.toggle('active',value==='select');document.getElementById('addMode').classList.toggle('active',value==='add');canvas.style.cursor=value==='add'?'crosshair':'default';}
+    document.getElementById('previousButton').onclick=()=>navigate(-1);
+    document.getElementById('nextButton').onclick=()=>navigate(1);
+    function navigate(step){if(!current)return;const index=images.findIndex(item=>item.image_id===current.image_id);if(index>=0&&images[index+step])loadImage(images[index+step].image_id);}
+    document.getElementById('exportButton').onclick=async()=>{if(dirty){setStatus('Guarda los cambios antes de exportar.','error');return;}if(!confirm('¿Crear snapshot de etiquetas YOLO?'))return;try{const result=await api('/api/export',{method:'POST',body:'{}'});setStatus(`Exportación creada: ${result.path}`,'ok');}catch(error){setStatus(error.message,'error');}};
+    document.getElementById('auditOpen').onclick=()=>{document.getElementById('auditPanel').hidden=false;if(!auditLoaded)loadAudit();};
+    document.getElementById('auditClose').onclick=()=>{document.getElementById('auditPanel').hidden=true;};
+    document.getElementById('auditRefresh').onclick=loadAudit;
+    document.getElementById('auditQuery').addEventListener('keydown',event=>{if(event.key==='Enter')loadAudit();});
+    window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+    window.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.getElementById('auditPanel').hidden){document.getElementById('auditPanel').hidden=true;}if(event.key==='Delete'&&selected()&&document.getElementById('auditPanel').hidden){document.getElementById('deleteButton').click();}if((event.ctrlKey||event.metaKey)&&event.key==='s'){event.preventDefault();save();}});
+    refreshImages().catch(error=>setStatus(error.message,'error'));
+  </script>
+</body>
+</html>

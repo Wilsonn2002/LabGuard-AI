@@ -56,6 +56,57 @@ La division debe realizarse por sesion, persona o laboratorio, no imagen por ima
 
 Antes de entrenar, revisar una muestra de etiquetas entre dos personas. Corregir cajas sueltas, clases confundidas, objetos omitidos y criterios inconsistentes. El conteo por clase del validador ayuda a detectar desbalances, pero no sustituye la inspeccion visual.
 
+## Importacion provisional desde Roboflow
+
+`import_roboflow.py` lee un ZIP sin modificarlo y escribe un staging separado bajo `.labguard-work/`, ignorado por Git. No mezcla archivos con `data/labguard/` ni cambia los splits originales.
+
+```bash
+python training/import_roboflow.py \
+  --zip "/mnt/d/8vo Semestre/Fundamentos_CPD/dataset_LabGuard.zip"
+```
+
+El importador conserva los miembros originales, convierte anotaciones de deteccion y poligonos a cajas, registra procedencia, duplicados, variantes Roboflow y videos de origen. La union de `Safety_Glasses` y `goggles` en `safety_goggles` queda marcada como `PROVISIONAL` para revision humana. El dataset no contiene anotaciones `lab_cap` y el staging no se considera listo para entrenamiento.
+
+Reportes principales:
+
+```text
+.labguard-work/roboflow_import/reports/import_report.md
+.labguard-work/roboflow_import/reports/import_report.json
+.labguard-work/roboflow_import/review/index.html
+```
+
+Para revisar las muestras:
+
+```bash
+python -m http.server 8000 --directory .labguard-work/roboflow_import/review
+```
+
+Luego abrir `http://localhost:8000`. Para repetir la importacion, usar otra ruta con `--output`; el script no sobrescribe un staging existente.
+
+### Editor local de anotaciones
+
+El editor crea `.labguard-work/annotation_review/` como copia independiente del staging. Permite crear, mover, redimensionar, reclasificar y eliminar cajas sin modificar el ZIP, el staging auditado ni `data/labguard/`:
+
+```bash
+python training/review_annotations.py --open-browser
+```
+
+La interfaz muestra la clase Roboflow original de cada caja y distingue las gafas provenientes de `Safety_Glasses` y `goggles`. Cada guardado conserva un historial before/after en `history/corrections.jsonl`. El boton de exportacion genera snapshots versionados bajo `exports/` con etiquetas YOLO, manifiesto y conteos por clase; no redistribuye imagenes ni cambia los splits.
+
+Para preparar la copia sin iniciar el servidor:
+
+```bash
+python training/review_annotations.py --prepare-only
+```
+
+La copia existente se reutiliza en ejecuciones posteriores. Para reiniciar desde el staging se debe elegir otra ruta con `--work`; el editor no sobrescribe copias existentes de forma automatica.
+
+#### Auditoria de consistencia
+
+El boton **Auditar anotaciones** compara los estados actuales sin cambiar etiquetas. Agrupa variantes aumentadas por frame canonico y secuencias por video de origen; senala diferencias de clases o conteos entre variantes, y usa ambos frames vecinos cercanos como evidencia temporal conservadora. Los filtros permiten limitar por prioridad, clase, tipo de relacion, split y texto.
+
+Los hallazgos son sugerencias para inspeccion humana, no detecciones: una clase ausente no demuestra que el EPP este ausente. **Revisar y decidir en el editor** abre la imagen correspondiente, pero no agrega, mueve ni copia cajas. Esto es especialmente importante entre variantes con recortes, transformaciones o diferencias visuales. Solo un guardado manual modifica la copia de trabajo; los splits permanecen intactos.
+
 ## Validacion en WSL
 
 Desde la raiz del repositorio:
