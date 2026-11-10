@@ -232,54 +232,23 @@ def run() -> None:
         "La bata y el gorro todavia no son evaluables y no se declara incumplimiento por su ausencia."
     )
 
-    st.subheader("Ajustes de inferencia")
-    confidence_column, size_column = st.columns(2)
-    default_confidence = min(max(configuration.confidence_threshold, 0.10), 0.60)
-    with confidence_column:
-        confidence_threshold = st.slider(
-            "Umbral de confianza",
-            min_value=0.10,
-            max_value=0.60,
-            value=float(default_confidence),
-            step=0.01,
-            help="Un valor menor recupera mas candidatos, pero puede aumentar falsos positivos.",
-        )
-    with size_column:
-        image_size = st.slider(
-            "Tamano de inferencia",
-            min_value=512,
-            max_value=640,
-            value=min(max(configuration.image_size, 512), 640),
-            step=32,
-            help="Una imagen mayor puede ayudar con EPP pequenos, a costa de mas tiempo en CPU.",
-        )
-    warnings_enabled = st.toggle(
-        "Mostrar advertencias visuales",
-        value=False,
-        help=(
-            "Solo se dibujan cuando existe una boca localizada de forma fiable y evidencia "
-            "explicita de ausencia de tapabocas."
-        ),
-    )
-    if warnings_enabled:
-        st.caption(
-            "Advertencias activadas. El pipeline actual aun no localiza rostros, por lo que no "
-            "se inventaran posiciones ni se mostraran iconos de ausencia."
-        )
-    individual_analysis_enabled = st.toggle(
-        "Analisis individual por persona",
-        value=False,
-        help=(
-            "Detecta personas con yolov8n.pt y ejecuta el modelo EPP dentro de cada recorte. "
-            "Puede ser mas lento en CPU."
-        ),
-    )
-    st.caption(
-        f"Procesamiento en CPU | confianza {confidence_threshold:.2f} | imagen {image_size}px"
-    )
+       default_confidence = min(max(configuration.confidence_threshold, 0.10), 0.60)
+    default_size = min(max(configuration.image_size, 512), 640)
 
-    uploaded_file = st.file_uploader(
-        "Carga una fotografia del laboratorio",
+    # Renderizar el panel lateral y extraer las variables
+    config_ui = render_sidebar(float(default_confidence), int(default_size))
+    
+    confidence_threshold = config_ui["confianza"]
+    image_size = config_ui["tamano"]
+    individual_analysis_enabled = config_ui["analisis_individual"]
+    warnings_enabled = config_ui["advertencias"]
+
+    st.caption(
+        f"Procesamiento en CPU | Modelo: {config_ui['modelo']} | confianza {confidence_threshold:.2f} | imagen {image_size}px"
+    )
+    
+        uploaded_file = st.file_uploader(
+            "Carga una fotografia del laboratorio",
         type=["jpg", "jpeg", "png"],
         help="Formatos admitidos: JPG, JPEG y PNG.",
     )
