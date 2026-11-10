@@ -1,0 +1,29 @@
+model:
+  architecture: yolov8n
+  source: entrenamiento_propio
+  repository: LabGuard-AI
+  filename: labguard_epp_5clases.pt
+  local_path: models/labguard_epp_5clases.pt
+
+class_mapping:
+  lab_coat: lab_coat
+  protective_gloves: protective_gloves
+  safety_goggles: safety_goggles
+  lab_cap: lab_cap
+  face_mask: face_mask
+
+person_detection:
+  local_path: yolov8n.pt
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  maximum_people: 50
+
+inference:
+  device: cpu
+  image_size: 640
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+
+hardware:
+  cuda_architecture: sm_61
+  vram_gb: 2

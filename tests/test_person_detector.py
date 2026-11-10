@@ -21,8 +21,9 @@ class FakeResult:
 
 
 class FakeModel:
-    def __init__(self, results) -> None:
+    def __init__(self, results, names=None) -> None:
         self.results = results
+        self.names = {0: "person"} if names is None else names
         self.calls = []
 
     def predict(self, **kwargs):
@@ -60,6 +61,32 @@ class YoloPersonDetectorTest(unittest.TestCase):
         self.assertEqual(model.calls[0]["classes"], [0])
         self.assertEqual(model.calls[0]["device"], "cpu")
         self.assertEqual(model.calls[0]["imgsz"], 640)
+
+    def test_resolves_person_by_name_in_specialized_model(self) -> None:
+        with TemporaryDirectory() as directory:
+            model_path = Path(directory) / "labguard.pt"
+            model_path.write_bytes(b"simulated model")
+            model = FakeModel([], names={0: "lab_coat", 4: "person"})
+            detector = YoloPersonDetector(
+                model_path,
+                model_loader=lambda _: model,
+            )
+
+            detector.detect(np.zeros((20, 20, 3), dtype=np.uint8))
+
+        self.assertEqual(model.calls[0]["classes"], [4])
+
+    def test_rejects_model_without_person_class(self) -> None:
+        with TemporaryDirectory() as directory:
+            model_path = Path(directory) / "ppe-only.pt"
+            model_path.write_bytes(b"simulated model")
+            detector = YoloPersonDetector(
+                model_path,
+                model_loader=lambda _: FakeModel([], names={0: "lab_coat"}),
+            )
+
+            with self.assertRaisesRegex(ValueError, "no contiene la clase 'person'"):
+                detector.detect(np.zeros((20, 20, 3), dtype=np.uint8))
 
 
 if __name__ == "__main__":

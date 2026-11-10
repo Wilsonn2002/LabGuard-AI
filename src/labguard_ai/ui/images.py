@@ -336,7 +336,7 @@ def annotate_people(
         y2 = min(max(y2, 0), max(height - 1, 0))
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 1)
 
-        label = analysis.person.person_id
+        label = f"{analysis.person.person_id} | EPP: {len(analysis.detections)}"
         (text_width, text_height), baseline = cv2.getTextSize(
             label,
             cv2.FONT_HERSHEY_SIMPLEX,

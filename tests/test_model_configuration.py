@@ -37,6 +37,20 @@ def valid_configuration() -> dict:
 
 
 class ModelConfigurationTest(unittest.TestCase):
+    def test_definitive_model_uses_person_and_all_five_ppe_classes(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+
+        configuration = load_model_configuration(
+            root / "configs" / "model_definitivo.yaml",
+            project_root=root,
+        )
+
+        self.assertEqual(configuration.person_model_path, configuration.model_path)
+        self.assertEqual(
+            configuration.class_mapping,
+            {item.value: item for item in PpeType},
+        )
+
     def test_loads_paths_mapping_and_inference_parameters(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

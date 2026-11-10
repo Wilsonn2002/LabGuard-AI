@@ -33,7 +33,7 @@ class Detection:
 
 @dataclass(frozen=True, slots=True)
 class PersonDetection:
-    """Persona COCO identificada temporalmente dentro de una fotografia."""
+    """Persona identificada temporalmente dentro de una fotografia."""
 
     person_id: str
     confidence: float
@@ -59,9 +59,10 @@ class PersonAnalysis:
 
 @dataclass(frozen=True, slots=True)
 class PersonAnalysisResult:
-    """Resultado independiente por cada persona visible en una fotografia."""
+    """Resultado por persona y detecciones EPP que no pudieron asociarse."""
 
     people: tuple[PersonAnalysis, ...]
+    unassigned_detections: tuple[Detection, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
