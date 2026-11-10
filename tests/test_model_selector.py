@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
-
-import pytest
 
 from labguard_ai.core.model_selector import (
     get_model_choices,
@@ -11,39 +11,49 @@ from labguard_ai.core.model_selector import (
 )
 
 
-def test_definitivo_disabled_when_yaml_missing_or_invalid(tmp_path: Path):
-    # Simulamos que provisional carga OK y definitivo falla.
-    project_root = tmp_path
+class TestModelSelector(unittest.TestCase):
+    def test_definitivo_disabled_when_yaml_missing_or_invalid(self):
+        with TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
 
-    def fake_load_model_configuration(config_path, *, project_root=None):
-        if "model_definitivo.yaml" in str(config_path):
-            raise RuntimeError("No se pudo leer el YAML")
-        return object()
+            def fake_load_model_configuration(config_path, *, project_root=None):
+                # Consideramos que solo falla el definitivo
+                if "model_definitivo.yaml" in str(config_path):
+                    raise RuntimeError("No se pudo leer el YAML")
+                # provisional "OK"
+                return object()
 
-    with patch(
-        "labguard_ai.core.model_selector.load_model_configuration",
-        side_effect=fake_load_model_configuration,
-    ):
-        provisional, definitivo = get_model_choices(project_root=project_root)
+            with patch(
+                "labguard_ai.core.model_selector.load_model_configuration",
+                side_effect=fake_load_model_configuration,
+            ):
+                provisional, definitivo = get_model_choices(project_root=project_root)
 
-    assert provisional.available is True
-    assert definitivo.available is False
-    assert "No se pudo leer" in (definitivo.error_message or "")
+            self.assertTrue(provisional.available)
+            self.assertFalse(definitivo.available)
+            self.assertIsNotNone(definitivo.error_message)
+            self.assertIn("No se pudo leer el YAML", definitivo.error_message)
+
+    def test_load_selected_configuration_raises_when_definitivo_unavailable(self):
+        with TemporaryDirectory() as tmp:
+            project_root = Path(tmp)
+
+            def fake_load_model_configuration(config_path, *, project_root=None):
+                raise RuntimeError("Definitivo no válido")
+
+            with patch(
+                "labguard_ai.core.model_selector.load_model_configuration",
+                side_effect=fake_load_model_configuration,
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    load_selected_configuration(
+                        mode="definitivo",
+                        project_root=project_root,
+                    )
+
+            self.assertIn("Definitivo no disponible", str(ctx.exception))
 
 
-def test_load_selected_configuration_raises_when_definitivo_unavailable(tmp_path: Path):
-    project_root = tmp_path
+if __name__ == "__main__":
+    unittest.main()
 
-    def fake_load_model_configuration(config_path, *, project_root=None):
-        raise RuntimeError("Definitivo no válido")
-
-    with patch(
-        "labguard_ai.core.model_selector.load_model_configuration",
-        side_effect=fake_load_model_configuration,
-    ):
-        with pytest.raises(RuntimeError) as exc:
-            load_selected_configuration(
-                mode="definitivo",
-                project_root=project_root,
-            )
-    assert "Definitivo no disponible" in str(exc.value)
