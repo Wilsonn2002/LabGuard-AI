@@ -14,7 +14,11 @@ import numpy as np
 
 from training.import_roboflow import (
     CLASS_MAPPING,
+    DATASET2_CLASS_MAPPING,
+    DATASET2_IMPORT_PROFILE,
+    DATASET2_SOURCE_CLASS_NAMES,
     DatasetImportError,
+    ExcludedAnnotation,
     SOURCE_CLASS_NAMES,
     import_roboflow_archive,
     parse_annotation_line,
@@ -29,6 +33,18 @@ names: ['Safety_Glasses', 'face_mask', 'gloves', 'goggles', 'lab_coat', 'person'
 roboflow:
   workspace: test
   project: labguard
+  version: 1
+  license: CC BY 4.0
+"""
+
+DATASET2_YAML = """train: ../train/images
+val: ../valid/images
+test: ../test/images
+nc: 13
+names: ['Blue Lab Coat', 'Full Lab Coat', 'Glasses', 'Gloves', 'Hair Cap', 'Lab Coat', 'Mask', 'No glasses', 'No gloves', 'No hair cap', 'No lab coat', 'No mask', 'Shoe Cover']
+roboflow:
+  workspace: test
+  project: labguard-2
   version: 1
   license: CC BY 4.0
 """
@@ -97,6 +113,39 @@ class AnnotationConversionTest(unittest.TestCase):
         for line in invalid_lines:
             with self.subTest(line=line), self.assertRaises(ValueError):
                 parse_annotation_line(line)
+
+    def test_dataset2_profile_maps_positive_classes_and_audits_exclusions(self) -> None:
+        self.assertEqual(len(DATASET2_SOURCE_CLASS_NAMES), 13)
+        self.assertEqual(
+            DATASET2_CLASS_MAPPING,
+            {0: 1, 1: 1, 2: 3, 3: 2, 4: 4, 5: 1, 6: 5, 7: None, 8: None,
+             9: None, 10: None, 11: None, 12: None},
+        )
+        glasses = parse_annotation_line(
+            "2 0.5 0.5 0.2 0.2", profile=DATASET2_IMPORT_PROFILE
+        )
+        excluded = parse_annotation_line(
+            "7 0.5 0.5 0.2 0.2", profile=DATASET2_IMPORT_PROFILE
+        )
+
+        self.assertEqual(glasses.target_class_id, 3)
+        self.assertTrue(glasses.provisional_merge)
+        self.assertIsInstance(excluded, ExcludedAnnotation)
+        self.assertEqual(excluded.source_class_name, "No glasses")
+
+    def test_dataset2_clips_only_tiny_boundary_rounding_errors(self) -> None:
+        line = "0 0.1 0.5 0.20002 0.2"
+
+        with self.assertRaises(ValueError):
+            parse_annotation_line(line)
+        annotation = parse_annotation_line(line, profile=DATASET2_IMPORT_PROFILE)
+
+        self.assertTrue(annotation.boundary_adjusted)
+        self.assertEqual(annotation.original_bounding_box, (0.1, 0.5, 0.20002, 0.2))
+        self.assertAlmostEqual(annotation.bounding_box[0] - annotation.bounding_box[2] / 2, 0)
+
+        with self.assertRaises(ValueError):
+            parse_annotation_line("0 0.1 0.5 0.201 0.2", profile=DATASET2_IMPORT_PROFILE)
 
 
 class RoboflowArchiveImportTest(unittest.TestCase):
@@ -332,6 +381,126 @@ class RoboflowArchiveImportTest(unittest.TestCase):
 
             self.assertFalse(output.exists())
             self.assertFalse((root / "escape.txt").exists())
+
+    def test_imports_dataset2_with_exclusions_overlaps_sequences_and_reference(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / "dataset2.zip"
+            output = root / "staging-2"
+            reference = root / "reference"
+            reference_image = jpeg_bytes(40)
+            (reference / "provenance").mkdir(parents=True)
+            (reference / "provenance/images.jsonl").write_text(
+                json.dumps(
+                    {
+                        "source_image": "train/images/reference.jpg",
+                        "image_sha256": hashlib.sha256(reference_image).hexdigest(),
+                        "canonical_frame": "frame_000001_jpg",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for _ in range(3):
+                    archive.writestr("data.yaml", DATASET2_YAML)
+                add_pair(
+                    archive,
+                    "train",
+                    "frame_000001_jpg.rf." + "a" * 32,
+                    "\n".join(
+                        (
+                            "0 0.5 0.5 0.4 0.5",
+                            "1 0.5 0.5 0.4 0.5",
+                            "5 0.5 0.5 0.4 0.5",
+                            "2 0.3 0.3 0.1 0.1",
+                            "4 0.5 0.2 0.2 0.2",
+                            "7 0.3 0.3 0.1 0.1",
+                            "12 0.5 0.8 0.2 0.1",
+                        )
+                    ),
+                    image=reference_image,
+                )
+                add_pair(
+                    archive,
+                    "valid",
+                    "frame_000002_jpg.rf." + "b" * 32,
+                    "3 0.5 0.5 0.2 0.2\n6 0.5 0.3 0.2 0.2\n8 0.5 0.5 0.2 0.2\n0 0.1 0.5 0.20002 0.2",
+                )
+                add_pair(
+                    archive,
+                    "test",
+                    "frame_000003_jpg.rf." + "c" * 32,
+                    "9 0.5 0.5 0.2 0.2\n10 0.5 0.5 0.2 0.2\n11 0.5 0.5 0.2 0.2",
+                )
+
+            report = import_roboflow_archive(
+                archive_path,
+                output,
+                samples_per_class=1,
+                profile=DATASET2_IMPORT_PROFILE,
+                reference_staging=reference,
+            )
+
+            self.assertEqual(report["profile_id"], "labguard_dataset_2")
+            self.assertEqual(report["source"]["duplicate_archive_members"], {"data.yaml": 3})
+            self.assertEqual(report["summary"]["images"], 3)
+            self.assertEqual(report["summary"]["source_annotations_valid"], 14)
+            self.assertEqual(report["summary"]["annotations"], 8)
+            self.assertEqual(report["summary"]["excluded_annotations"], 6)
+            self.assertEqual(report["summary"]["boundary_adjustments"], 1)
+            self.assertEqual(report["summary"]["provisional_annotations"], 1)
+            self.assertEqual(report["target_class_counts"]["0"]["total"], 0)
+            self.assertEqual(report["target_class_counts"]["1"]["total"], 4)
+            self.assertEqual(len(report["coat_overlap_candidates"]), 3)
+            self.assertTrue(
+                all(
+                    item["action"] == "manual_review_required_no_automatic_deletion"
+                    for item in report["coat_overlap_candidates"]
+                )
+            )
+            self.assertEqual(report["groups"]["name_sequence_group_count"], 1)
+            self.assertEqual(report["groups"]["cross_split_name_sequence_group_count"], 1)
+            self.assertEqual(
+                report["groups"]["external_comparison"]["exact_duplicate_count"], 1
+            )
+            self.assertEqual(
+                len((output / "provenance/excluded_annotations.jsonl").read_text().splitlines()),
+                6,
+            )
+            self.assertEqual(
+                len((output / "provenance/coat_overlap_candidates.jsonl").read_text().splitlines()),
+                3,
+            )
+            adjustment = json.loads(
+                (output / "provenance/boundary_adjustments.jsonl").read_text().strip()
+            )
+            self.assertTrue(adjustment["boundary_adjusted"])
+            self.assertNotEqual(
+                adjustment["original_bounding_box"], adjustment["converted_bounding_box"]
+            )
+            converted = next((output / "converted/labels/train").glob("*.txt")).read_text()
+            self.assertEqual(sum(line.startswith("1 ") for line in converted.splitlines()), 3)
+            self.assertNotIn("7 ", converted)
+            self.assertIn("EXCLUIDA", (output / "review/index.html").read_text(encoding="utf-8"))
+
+    def test_dataset2_rejects_divergent_duplicate_data_yaml(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / "dataset2.zip"
+            output = root / "staging"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("data.yaml", DATASET2_YAML)
+                archive.writestr("data.yaml", DATASET2_YAML.replace("nc: 13", "nc: 12"))
+
+            with self.assertRaises(DatasetImportError):
+                import_roboflow_archive(
+                    archive_path,
+                    output,
+                    profile=DATASET2_IMPORT_PROFILE,
+                )
+
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

@@ -38,10 +38,21 @@
     button.active { outline: 2px solid var(--accent); }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .toolbar { display: flex; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
     .toolbar button { width: auto; min-width: 100px; }
-    .canvas-shell { flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; overflow: auto; }
-    canvas { max-width: 100%; max-height: 100%; background: #020609; box-shadow: 0 0 0 1px #35505b; touch-action: none; cursor: crosshair; }
+    .view-toolbar { flex-wrap: wrap; padding-block: 8px; }
+    .view-toolbar > span { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .view-toolbar .toggle { display: flex; align-items: center; gap: 7px; margin: 0 0 0 auto; color: var(--ink); font-size: 13px; }
+    .view-toolbar .toggle input { width: auto; margin: 0; }
+    .canvas-shell { flex: 1; min-height: 0; padding: 12px; overflow: hidden; }
+    .canvas-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; height: 100%; min-height: 0; }
+    .canvas-grid.single { grid-template-columns: minmax(0, 1fr); }
+    .canvas-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: #020609; }
+    .pane-title { padding: 7px 10px; color: var(--muted); background: #0b1921; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .canvas-frame { display: grid; place-items: center; min-width: 0; min-height: 0; padding: 8px; overflow: auto; }
+    canvas { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; background: #020609; box-shadow: 0 0 0 1px #35505b; }
+    #canvas { touch-action: none; cursor: crosshair; }
+    #originalCanvas { pointer-events: none; cursor: default; }
     #imageSelect { height: calc(100vh - 310px); min-height: 260px; }
     .status { padding: 8px 10px; border-top: 1px solid var(--line); color: var(--muted); background: var(--panel); }
     .status.error { color: #ff9da2; }
@@ -88,6 +99,10 @@
       main { height: 70vh; min-height: 480px; }
       .toolbar { flex-wrap: wrap; }
       .toolbar button { flex: 1 1 130px; }
+      .view-toolbar .toggle { margin-left: 0; flex: 1 1 100%; }
+      .canvas-shell { overflow: auto; }
+      .canvas-grid { grid-template-columns: 1fr; height: auto; }
+      .canvas-pane { min-height: 280px; }
       .audit-body { display: block; overflow: auto; }
       .audit-filters, .audit-results { overflow: visible; border: 0; }
       .audit-summary { grid-template-columns: 1fr 1fr; }
@@ -127,7 +142,24 @@
         <button id="nextButton">Siguiente</button>
         <button id="saveButton" class="primary">Guardar cambios</button>
       </div>
-      <div class="canvas-shell"><canvas id="canvas"></canvas></div>
+      <div class="toolbar view-toolbar" aria-label="Controles de visualización">
+        <span>Vista</span>
+        <button id="comparisonView" class="active" aria-pressed="true">Comparativa</button>
+        <button id="singleView" aria-pressed="false">Individual anotada</button>
+        <label class="toggle"><input id="showClassNames" type="checkbox" checked> Mostrar nombres de clases</label>
+      </div>
+      <div class="canvas-shell">
+        <div id="canvasGrid" class="canvas-grid">
+          <section id="originalPane" class="canvas-pane" aria-label="Imagen original limpia">
+            <div class="pane-title">Original · solo referencia</div>
+            <div class="canvas-frame"><canvas id="originalCanvas" aria-label="Imagen original sin anotaciones"></canvas></div>
+          </section>
+          <section class="canvas-pane" aria-label="Imagen anotada editable">
+            <div class="pane-title">Anotada · editable</div>
+            <div class="canvas-frame"><canvas id="canvas" aria-label="Imagen con anotaciones editables"></canvas></div>
+          </section>
+        </div>
+      </div>
       <div id="status" class="status">Selecciona una imagen.</div>
     </main>
 
@@ -135,7 +167,12 @@
       <h2 style="margin-top:0">Anotaciones</h2>
       <div id="imageMeta" class="meta">Sin imagen seleccionada.</div>
       <div class="callout">
-        Para batas parcialmente visibles y gorros de laboratorio, dibuja una caja ceñida únicamente a la porción visible. No inventes la parte ocluida.
+        <strong>Política de bata:</strong> <code>1 lab_coat</code> representa únicamente una bata tradicional blanca de laboratorio.
+        No etiquetes trajes integrales o cleanroom suits, overoles, uniformes médicos o quirúrgicos ni batas de otros colores.
+        Las cajas de batas convertidas automáticamente, especialmente las del segundo dataset, son provisionales: revísalas manualmente y no las elimines por regla automática.
+      </div>
+      <div class="callout">
+        Para batas blancas parcialmente visibles y gorros de laboratorio, dibuja una caja ceñida únicamente a la porción visible. No inventes la parte ocluida.
         Las gafas provisionales muestran si su clase original era <code>Safety_Glasses</code> o <code>goggles</code>.
       </div>
       <label for="newClass">Clase para cajas nuevas</label>
@@ -207,9 +244,12 @@
     const COLORS = ['#dcc63e','#32d583','#55b9ff','#ffbe55','#c77dff','#ff6b8a'];
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const originalCanvas = document.getElementById('originalCanvas');
+    const originalCtx = originalCanvas.getContext('2d');
     let image = new Image();
     let images = [], current = null, annotations = [], selectedId = null;
     let mode = 'select', dirty = false, drag = null, draft = null;
+    let viewMode = 'comparison', showClassNames = true;
     let auditLoaded = false, lastLoadError = '';
 
     function optionMarkup(includeAll=false) {
@@ -311,9 +351,12 @@
         setDirty(false);
         canvas.width=image.naturalWidth;
         canvas.height=image.naturalHeight;
+        originalCanvas.width=image.naturalWidth;
+        originalCanvas.height=image.naturalHeight;
         syncImageSelector(payload);
         renderPanels();
         renderHistory(historyResult.events);
+        drawOriginal();
         draw();
         setStatus(`Revisión ${payload.revision} · ${annotations.length} cajas`, 'ok');
         return true;
@@ -334,6 +377,10 @@
     }
     function bboxFromEdges(box) {
       return [(box.l+box.r)/2,(box.t+box.b)/2,box.r-box.l,box.b-box.t];
+    }
+    function drawOriginal() {
+      originalCtx.clearRect(0,0,originalCanvas.width,originalCanvas.height);
+      if(image.complete&&image.naturalWidth)originalCtx.drawImage(image,0,0,originalCanvas.width,originalCanvas.height);
     }
     function point(event) {
       const rect = canvas.getBoundingClientRect();
@@ -357,13 +404,22 @@
     function drawAnnotation(annotation, active) {
       const box=edges(annotation), color=COLORS[annotation.class_id];
       const x=box.l*canvas.width,y=box.t*canvas.height,w=(box.r-box.l)*canvas.width,h=(box.b-box.t)*canvas.height;
-      ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=active?3:2; if(active) ctx.setLineDash([10,4]);
-      ctx.strokeRect(x,y,w,h); ctx.setLineDash([]);
-      const origin = annotation.origin?.provisional_merge ? ` ← ${annotation.origin.source_class_name}` : '';
-      const label=`${annotation.class_id} ${CLASSES[annotation.class_id]}${origin}`;
-      ctx.font='13px system-ui'; const tw=ctx.measureText(label).width+10;
-      ctx.fillStyle=color; ctx.fillRect(x,Math.max(0,y-20),tw,20); ctx.fillStyle='#061017';
-      ctx.fillText(label,x+5,Math.max(14,y-6));
+      ctx.save();
+      if(active){ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=7;ctx.strokeRect(x,y,w,h);}
+      ctx.strokeStyle=color;ctx.lineWidth=active?3:2;ctx.strokeRect(x,y,w,h);
+      if(showClassNames){
+        const label=`${annotation.class_id} ${CLASSES[annotation.class_id]}`,labelHeight=19;
+        ctx.font='600 12px system-ui';
+        const labelWidth=Math.min(canvas.width,ctx.measureText(label).width+10);
+        const labelX=clamp(x,0,Math.max(0,canvas.width-labelWidth));
+        const labelY=y>=labelHeight?y-labelHeight:Math.min(canvas.height-labelHeight,y+h);
+        ctx.fillStyle='rgba(6,16,23,.84)';ctx.fillRect(labelX,labelY,labelWidth,labelHeight);
+        ctx.strokeStyle=color;ctx.lineWidth=1;ctx.strokeRect(labelX,labelY,labelWidth,labelHeight);
+        ctx.save();
+        ctx.beginPath();ctx.rect(labelX,labelY,labelWidth,labelHeight);ctx.clip();
+        ctx.fillStyle='#f7fbfc';ctx.fillText(label,labelX+5,labelY+14);
+        ctx.restore();
+      }
       if(active) handles(box).forEach(handle => {ctx.fillStyle='#fff';ctx.fillRect(handle.x*canvas.width-5,handle.y*canvas.height-5,10,10);ctx.strokeRect(handle.x*canvas.width-5,handle.y*canvas.height-5,10,10);});
       ctx.restore();
     }
@@ -440,6 +496,7 @@
       document.getElementById('originMeta').innerHTML = origin.kind==='roboflow_import'
         ? `<strong>Origen:</strong> ${escapeHtml(origin.source_class_name)} (ID ${origin.source_class_id})<br>`+
           `<span class="badge ${origin.provisional_merge?'warning':''}">${origin.provisional_merge?'FUSIÓN PROVISIONAL':'importada'}</span>`+
+          `${origin.boundary_adjusted?' <span class="badge warning">AJUSTE DE BORDE</span>':''}`+
           `<br>${escapeHtml(origin.source_format)} · línea ${origin.line_number}`
         : '<strong>Origen:</strong> caja agregada manualmente';
     }
@@ -513,6 +570,21 @@
     }
 
     document.getElementById('saveButton').onclick=save;
+    document.getElementById('comparisonView').onclick=()=>setViewMode('comparison');
+    document.getElementById('singleView').onclick=()=>setViewMode('single');
+    document.getElementById('showClassNames').onchange=event=>setLabelVisibility(event.target.checked);
+    function setViewMode(value){
+      if(!['comparison','single'].includes(value))return;
+      viewMode=value;
+      document.getElementById('canvasGrid').classList.toggle('single',viewMode==='single');
+      document.getElementById('originalPane').hidden=viewMode==='single';
+      document.getElementById('comparisonView').classList.toggle('active',viewMode==='comparison');
+      document.getElementById('singleView').classList.toggle('active',viewMode==='single');
+      document.getElementById('comparisonView').setAttribute('aria-pressed',String(viewMode==='comparison'));
+      document.getElementById('singleView').setAttribute('aria-pressed',String(viewMode==='single'));
+      drawOriginal();draw();
+    }
+    function setLabelVisibility(value){showClassNames=Boolean(value);draw();}
     document.getElementById('refreshButton').onclick=()=>refreshImages();
     document.getElementById('imageSelect').onchange=event=>loadImage(event.target.value);
     document.getElementById('selectMode').onclick=()=>setMode('select');

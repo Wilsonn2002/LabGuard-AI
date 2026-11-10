@@ -209,6 +209,10 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
             ["Safety_Glasses", "goggles"],
         )
         self.assertTrue(all(item["origin"]["provisional_merge"] for item in state["annotations"]))
+        self.assertTrue(all(not item["origin"]["boundary_adjusted"] for item in state["annotations"]))
+        self.assertTrue(
+            all(item["origin"]["original_bounding_box"] == item["bbox"] for item in state["annotations"])
+        )
 
         with self.assertRaises(AnnotationReviewError):
             initialise_workspace(self.source, self.work)
@@ -291,7 +295,7 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
             "Eliminar anotación",
             "Safety_Glasses",
             "goggles",
-            "batas parcialmente visibles",
+            "batas blancas parcialmente visibles",
             "gorros de laboratorio",
             "/api/save",
             "/api/export",
@@ -308,6 +312,9 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
             "fuera del filtro",
             "auditError",
             "const target = preferredId || images[0]?.image_id",
+            "únicamente una bata tradicional blanca de laboratorio",
+            "cleanroom suits",
+            "son provisionales",
         ):
             self.assertIn(expected, html)
         navigation = html[html.index("document.querySelectorAll('.audit-review')") :]
@@ -317,6 +324,38 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
         )
         self.assertIn("if(!loaded)", navigation)
         self.assertNotIn("image.onload =", html)
+
+    def test_comparison_and_label_controls_are_client_only(self) -> None:
+        html_path = Path(__file__).parents[1] / "training/review_editor.html"
+        html = html_path.read_text(encoding="utf-8")
+
+        for expected in (
+            'id="originalCanvas"',
+            'id="canvas"',
+            'id="comparisonView"',
+            'id="singleView"',
+            'id="showClassNames"',
+            "function drawOriginal()",
+            "if(showClassNames)",
+            "rgba(255,255,255,.95)",
+        ):
+            self.assertIn(expected, html)
+        self.assertNotIn("originalCanvas.addEventListener", html)
+
+        original_draw = html[
+            html.index("function drawOriginal()") : html.index("function point(event)")
+        ]
+        self.assertIn("originalCtx.drawImage(image", original_draw)
+        self.assertNotIn("annotations", original_draw)
+
+        view_control = html[
+            html.index("function setViewMode(value)") : html.index(
+                "document.getElementById('refreshButton')"
+            )
+        ]
+        self.assertNotIn("annotations=", view_control.replace(" ", ""))
+        self.assertNotIn("/api/save", view_control)
+        self.assertIn("showClassNames=Boolean(value)", view_control.replace(" ", ""))
 
     def test_audit_prioritizes_related_discrepancies_without_writing(self) -> None:
         self.add_audit_image(
@@ -451,6 +490,7 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
 
     def test_local_http_server_serves_editor_and_image_catalog(self) -> None:
         store = self.initialise()
+        workspace_before = tree_hashes(self.work)
         handler = type("TestAnnotationHandler", (AnnotationRequestHandler,), {"store": store})
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -463,9 +503,14 @@ class AnnotationReviewWorkspaceTest(unittest.TestCase):
                 catalog = json.load(response)
             with urlopen(f"{address}/api/audit?class_id=4", timeout=5) as response:
                 audit = json.load(response)
+            image_id = catalog["items"][0]["image_id"]
+            with urlopen(f"{address}/api/annotation?id={image_id}", timeout=5) as response:
+                annotation = json.load(response)
             self.assertEqual(catalog["total"], 2)
             self.assertEqual(len(catalog["items"]), 2)
             self.assertTrue(audit["notice"].startswith("Hallazgos heurísticos"))
+            self.assertEqual(annotation["revision"], 0)
+            self.assertEqual(tree_hashes(self.work), workspace_before)
         finally:
             server.shutdown()
             thread.join(timeout=5)

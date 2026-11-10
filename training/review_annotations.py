@@ -120,7 +120,7 @@ def _append_jsonl(path: Path, value: dict[str, Any]) -> None:
         os.close(descriptor)
 
 
-def _normalise_bbox(raw_bbox: Any) -> list[float]:
+def _normalise_bbox_values(raw_bbox: Any) -> list[float]:
     if not isinstance(raw_bbox, list) or len(raw_bbox) != 4:
         raise AnnotationReviewError("bbox debe contener [x_center, y_center, width, height]")
     if any(isinstance(value, bool) for value in raw_bbox):
@@ -136,6 +136,11 @@ def _normalise_bbox(raw_bbox: Any) -> list[float]:
         raise AnnotationReviewError("el centro de la caja debe estar entre 0 y 1")
     if not 0.0 < width <= 1.0 or not 0.0 < height <= 1.0:
         raise AnnotationReviewError("ancho y alto deben estar entre 0 (exclusivo) y 1")
+    return [x_center, y_center, width, height]
+
+
+def _normalise_bbox(raw_bbox: Any) -> list[float]:
+    x_center, y_center, width, height = _normalise_bbox_values(raw_bbox)
     if (
         x_center - width / 2 < -1e-8
         or x_center + width / 2 > 1.0 + 1e-8
@@ -181,6 +186,7 @@ def _state_annotation(provenance: dict[str, Any]) -> dict[str, Any]:
     annotation_id = hashlib.sha256(f"{source_label}:{line_number}".encode()).hexdigest()[:24]
     class_id = _normalise_class_id(provenance["target_class_id"])
     bbox = _normalise_bbox(provenance["converted_bounding_box"])
+    original_bbox = _normalise_bbox_values(provenance.get("original_bounding_box", bbox))
     return {
         "id": annotation_id,
         "class_id": class_id,
@@ -194,6 +200,8 @@ def _state_annotation(provenance: dict[str, Any]) -> dict[str, Any]:
             "line_number": line_number,
             "source_format": str(provenance["source_format"]),
             "provisional_merge": bool(provenance["provisional_merge"]),
+            "boundary_adjusted": bool(provenance.get("boundary_adjusted", False)),
+            "original_bounding_box": original_bbox,
             "original_annotation": str(provenance["original_annotation"]),
         },
     }
