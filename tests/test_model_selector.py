@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from labguard_ai.core.model_selector import (
+from labguard_ai.core.models_selector import (
     get_model_choices,
     load_selected_configuration,
 )
@@ -24,7 +24,7 @@ class TestModelSelector(unittest.TestCase):
                 return object()
 
             with patch(
-                "labguard_ai.core.model_selector.load_model_configuration",
+                "labguard_ai.core.models_selector.load_model_configuration",
                 side_effect=fake_load_model_configuration,
             ):
                 provisional, definitivo = get_model_choices(project_root=project_root)
@@ -42,7 +42,7 @@ class TestModelSelector(unittest.TestCase):
                 raise RuntimeError("Definitivo no válido")
 
             with patch(
-                "labguard_ai.core.model_selector.load_model_configuration",
+                "labguard_ai.core.models_selector.load_model_configuration",
                 side_effect=fake_load_model_configuration,
             ):
                 with self.assertRaises(RuntimeError) as ctx:
@@ -56,4 +56,3 @@ class TestModelSelector(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
