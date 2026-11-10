@@ -13,7 +13,7 @@ class_mapping:
   face_mask: face_mask
 
 person_detection:
-  local_path: yolov8n.pt
+  local_path: models/labguard_epp_5clases.pt
   confidence_threshold: 0.25
   iou_threshold: 0.45
   maximum_people: 50
