@@ -7,6 +7,7 @@ from labguard_ai.core import EvaluationStatus, PersonAnalysisResult, PpeType
 from labguard_ai.detection import YoloPersonDetector, YoloPpeDetector
 from labguard_ai.processing.image import ImageAnalyzer
 from labguard_ai.processing.person import PersonPpeAnalyzer
+from labguard_ai.ui.sidebar import render_sidebar
 from labguard_ai.ui.images import (
     annotate_image,
     annotate_people,
