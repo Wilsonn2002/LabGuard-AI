@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "generated_for": "LabGuard AI - entrega de datasets",
+  "cutoff_utc": "2026-11-10",
+  "branch": "main",
+  "fully_validated": false,
+  "backup": {
+    "included_in_light_package": false,
+    "path": "~/LabGuard-Backups/LabGuard_Anotaciones_Final.tar.gz",
+    "size_mib": 79,
+    "sha256": "8b4fa4f6634d580ddbbeb0dddd1d82163d67a1d5db5b0fd51b34f8799d5dfce1"
+  },
+  "datasets": {
+    "dataset_1": {
+      "workspace": ".labguard-work/annotation_review",
+      "export_id": "20261110T033741Z-e878480c",
+      "created_at_utc": "2026-11-10T03:37:43.616127+00:00",
+      "image_count": 2223,
+      "label_file_count": 2223,
+      "empty_label_file_count": 32,
+      "object_count": 6189,
+      "class_counts": {
+        "0": 1467,
+        "1": 1290,
+        "2": 2427,
+        "3": 454,
+        "4": 3,
+        "5": 548
+      },
+      "split_label_files": {
+        "train": 2103,
+        "val": 70,
+        "test": 50
+      },
+      "split_objects": {
+        "train": 5852,
+        "val": 199,
+        "test": 138
+      },
+      "history_events": 43,
+      "human_touched_images": 36,
+      "revision_distribution": {
+        "0": 2187,
+        "1": 29,
+        "2": 7
+      },
+      "history_changes": {
+        "created": 56,
+        "updated": 15,
+        "deleted": 1
+      },
+      "provisional_origin_annotations": 441,
+      "manifest_sha256": "15b915205d47c8bc7d63ebb445abcefae534e390734e2b9aeac3107f91224cc1",
+      "dataset_yaml_sha256": "7754b42b2992cd24d291e339e5cc3cd60759d2f0a6a77707410e77463a9c3033",
+      "canonical_label_tree_sha256": "8b0e81415569d74f79e6210099d8609fdffe8d507f124aad49307242c9a4a185",
+      "manifest_label_hashes_match": true,
+      "manifest_class_counts_match": true,
+      "history_hash_matches": true,
+      "workspace_labels_match_export": true,
+      "invalid_yolo_lines": 0,
+      "ready_for_training": false
+    },
+    "dataset_2": {
+      "workspace": ".labguard-work/annotation_review_2",
+      "export_id": "20261110T033453Z-9d5f043c",
+      "created_at_utc": "2026-11-10T03:34:54.157741+00:00",
+      "image_count": 370,
+      "label_file_count": 370,
+      "empty_label_file_count": 36,
+      "object_count": 1670,
+      "class_counts": {
+        "0": 0,
+        "1": 502,
+        "2": 226,
+        "3": 62,
+        "4": 497,
+        "5": 383
+      },
+      "split_label_files": {
+        "train": 180,
+        "val": 95,
+        "test": 95
+      },
+      "split_objects": {
+        "train": 691,
+        "val": 359,
+        "test": 620
+      },
+      "history_events": 94,
+      "human_touched_images": 92,
+      "revision_distribution": {
+        "0": 278,
+        "1": 90,
+        "2": 2
+      },
+      "history_changes": {
+        "created": 0,
+        "updated": 2,
+        "deleted": 96
+      },
+      "provisional_origin_annotations": 62,
+      "manifest_sha256": "59f87576b97a9c85f36c04a891036cdb79cba9429cc4a3ad946bbf7491bd4917",
+      "dataset_yaml_sha256": "de3414d63aa348d6955272c99b8f05016ca999e69c9b778591f819b178f399d1",
+      "canonical_label_tree_sha256": "cc6bf0098b798f61d55f9ce01e56ad2323906bd82f5fedbcb1d56c80987b8078",
+      "manifest_label_hashes_match": true,
+      "manifest_class_counts_match": true,
+      "history_hash_matches": true,
+      "workspace_labels_match_export": true,
+      "invalid_yolo_lines": 0,
+      "ready_for_training": false,
+      "person_annotations_missing": true,
+      "cross_split_augmented_variant_groups": 1,
+      "cross_split_name_sequence_groups": 1
+    }
+  }
+}
