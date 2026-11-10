@@ -247,14 +247,30 @@ def run() -> None:
         f"Procesamiento en CPU | Modelo: {config_ui['modelo']} | confianza {confidence_threshold:.2f} | imagen {image_size}px"
     )
     
+        # === CREACIÓN DE PESTAÑAS ===
+    tab_imagen, tab_video = st.tabs(["📷 Procesar Imagen", "🎥 Procesar Video"])
+
+    with tab_video:
+        st.info("Soporte para video MP4. Aquí implementaremos el procesamiento frame a frame.")
+        video_file = st.file_uploader(
+            "Carga un video del laboratorio",
+            type=["mp4", "avi", "mov"],
+            help="Formatos admitidos: MP4, AVI y MOV."
+        )
+        if video_file is not None:
+            st.warning("El motor de procesamiento de video está en construcción para la próxima iteración.")
+
+    with tab_imagen:
         uploaded_file = st.file_uploader(
             "Carga una fotografia del laboratorio",
-        type=["jpg", "jpeg", "png"],
-        help="Formatos admitidos: JPG, JPEG y PNG.",
-    )
-    if uploaded_file is None:
-        st.caption("La imagen se procesa localmente cuando seleccionas un archivo.")
-        return
+            type=["jpg", "jpeg", "png"],
+            help="Formatos admitidos: JPG, JPEG y PNG.",
+        )
+        if uploaded_file is None:
+            st.caption("La imagen se procesa localmente cuando seleccionas un archivo.")
+            return  # Detiene la ejecución aquí si no hay imagen
+            
+    
 
     try:
         original = decode_uploaded_image(uploaded_file.getvalue())
