@@ -116,7 +116,18 @@ Ejecuta la suite desde la raíz:
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -p 'test_*.py'
 ```
+##  Interfaz Gráfica (UI)
 
+La interfaz de usuario ha sido desarrollada en Streamlit, ofreciendo un panel de configuración lateral y soporte para procesamiento de imágenes y video en tiempo real.
+
+### Cómo ejecutar la aplicación
+
+1. Asegúrate de estar en el entorno virtual del proyecto y tener las dependencias instaladas (`pip install -r requirements.txt`).
+2. Verifica que los modelos base (`yolov8n.pt` o el modelo provisional) estén en el directorio correcto según la configuración en `configs/model.yaml`.
+3. Ejecuta el siguiente comando desde la raíz del proyecto:
+
+```bash
+streamlit run src/labguard_ai/ui/app.py
 ## Documentación
 
 - [Instalación en Windows y WSL2](docs/INSTALACION.md)
