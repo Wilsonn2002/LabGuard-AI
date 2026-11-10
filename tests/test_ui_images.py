@@ -5,10 +5,18 @@ import unittest
 import cv2
 import numpy as np
 
-from labguard_ai.core import AnalysisResult, ComplianceAssessment, Detection, PpeType
+from labguard_ai.core import (
+    AnalysisResult,
+    ComplianceAssessment,
+    Detection,
+    PersonAnalysis,
+    PersonDetection,
+    PpeType,
+)
 from labguard_ai.ui.images import (
     FaceMaskAbsenceEvidence,
     annotate_image,
+    annotate_people,
     build_face_mask_warnings,
     count_detections,
     decode_uploaded_image,
@@ -39,6 +47,19 @@ class UiImagesTest(unittest.TestCase):
         detection = Detection(PpeType.FACE_MASK, 0.91, (10, 20, 80, 90))
 
         annotated = annotate_image(original, [detection])
+
+        self.assertFalse(np.array_equal(annotated, original))
+        self.assertFalse(original.any())
+
+    def test_draws_person_with_assigned_ppe_count(self) -> None:
+        original = np.zeros((100, 120, 3), dtype=np.uint8)
+        analysis = PersonAnalysis(
+            person=PersonDetection("Persona 1", 0.95, (10, 10, 100, 95)),
+            detections=(Detection(PpeType.FACE_MASK, 0.91, (35, 20, 65, 45)),),
+            statuses=(),
+        )
+
+        annotated = annotate_people(original, [analysis])
 
         self.assertFalse(np.array_equal(annotated, original))
         self.assertFalse(original.any())

@@ -97,6 +97,38 @@ class YoloPpeDetectorTest(unittest.TestCase):
         self.assertEqual(detections[0].item, PpeType.FACE_MASK)
         self.assertEqual(model.calls[0]["source"].shape, (12, 16, 3))
 
+    def test_maps_all_definitive_ppe_classes_and_ignores_person(self) -> None:
+        names = {
+            0: "person",
+            1: "lab_coat",
+            2: "protective_gloves",
+            3: "safety_goggles",
+            4: "lab_cap",
+            5: "face_mask",
+        }
+        model = FakeYoloModel(
+            [
+                FakeResult(
+                    FakeBoxes(
+                        classes=list(names),
+                        confidences=[0.90] * len(names),
+                        coordinates=[[0, 0, 10, 10]] * len(names),
+                    ),
+                    names=names,
+                )
+            ]
+        )
+        mapping = {item.value: item for item in PpeType}
+        detector = YoloPpeDetector(
+            self.model_path,
+            mapping,
+            model_loader=lambda _: model,
+        )
+
+        detections = detector.detect(np.zeros((20, 20, 3), dtype=np.uint8))
+
+        self.assertEqual([detection.item for detection in detections], list(PpeType))
+
     def test_integrates_with_image_analyzer_and_compliance_evaluator(self) -> None:
         class_names = {index: item.value for index, item in enumerate(PpeType)}
         model = FakeYoloModel(

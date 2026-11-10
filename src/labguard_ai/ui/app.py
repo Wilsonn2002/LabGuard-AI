@@ -48,7 +48,7 @@ def build_person_analyzer(
     confidence_threshold: float,
     image_size: int,
 ) -> PersonPpeAnalyzer:
-    """Construye los detectores COCO y EPP usados en el flujo por persona."""
+    """Construye los detectores de personas y EPP usados en el flujo individual."""
     if configuration.person_model_path is None:
         raise FileNotFoundError("No se configuro el modelo local de personas")
 
@@ -100,6 +100,9 @@ def _person_analyzer_key(
         "individual",
         str(configuration.person_model_path),
         str(configuration.model_path),
+        tuple(
+            sorted((key, value.value) for key, value in configuration.class_mapping.items())
+        ),
         confidence_threshold,
         configuration.person_confidence_threshold,
         configuration.person_iou_threshold,
@@ -162,37 +165,45 @@ def _status_text(status: EvaluationStatus) -> str:
 def _render_person_results(st, result: PersonAnalysisResult) -> None:
     st.subheader("Resultado individual")
     if not result.people:
-        st.warning("No se detectaron personas con el modelo COCO en esta fotografia.")
-        return
-
-    st.metric("Personas detectadas", len(result.people))
-    st.caption(
-        "Los identificadores son temporales y se asignan de izquierda a derecha en cada fotografia."
-    )
-    for analysis in result.people:
-        with st.container(border=True):
-            st.markdown(
-                f"### {analysis.person.person_id} · persona {analysis.person.confidence:.1%}"
-            )
-            status_columns = st.columns(len(analysis.statuses))
-            for column, item_status in zip(
-                status_columns,
-                analysis.statuses,
-                strict=True,
-            ):
-                column.caption(ppe_label(item_status.item))
-                column.write(f"**{_status_text(item_status.status)}**")
-
-            if analysis.detections:
-                for detection in analysis.detections:
-                    st.write(
-                        f"{ppe_label(detection.item)}: {detection.confidence:.1%}"
-                    )
-            else:
-                st.caption(
-                    "No se asignaron detecciones EPP a esta persona; el resultado queda "
-                    "como No determinado para las clases evaluables."
+        st.warning("No se detectaron personas en esta fotografia.")
+    else:
+        st.metric("Personas detectadas", len(result.people))
+        st.caption(
+            "Los identificadores son temporales y se asignan de izquierda a derecha en cada fotografia."
+        )
+        for analysis in result.people:
+            with st.container(border=True):
+                st.markdown(
+                    f"### {analysis.person.person_id} · persona {analysis.person.confidence:.1%}"
                 )
+                st.caption(f"EPP asignados: {len(analysis.detections)}")
+                status_columns = st.columns(len(analysis.statuses))
+                for column, item_status in zip(
+                    status_columns,
+                    analysis.statuses,
+                    strict=True,
+                ):
+                    column.caption(ppe_label(item_status.item))
+                    column.write(f"**{_status_text(item_status.status)}**")
+
+                if analysis.detections:
+                    for detection in analysis.detections:
+                        st.write(
+                            f"{ppe_label(detection.item)}: {detection.confidence:.1%}"
+                        )
+                else:
+                    st.caption(
+                        "No se asignaron detecciones EPP a esta persona; el resultado queda "
+                        "como No determinado para las clases evaluables."
+                    )
+
+    if result.unassigned_detections:
+        st.warning(
+            f"{len(result.unassigned_detections)} deteccion(es) EPP no intersectan una "
+            "persona y se muestran sin asignar."
+        )
+        for detection in result.unassigned_detections:
+            st.write(f"Sin asignar · {ppe_label(detection.item)}: {detection.confidence:.1%}")
 
 
 def run() -> None:
@@ -220,16 +231,49 @@ def run() -> None:
     )
     st.markdown('<hr class="labguard-rule">', unsafe_allow_html=True)
 
+    st.subheader("Seleccion del modelo")
+
+    opciones_modelo = {
+        "LabGuard AI - modelo entrenado (5 EPP)": (
+            "configs/model_definitivo.yaml"
+        ),
+        "Hugging Face - modelo provisional (3 EPP)": (
+            "configs/model.yaml"
+        ),
+    }
+
+    modelo_seleccionado = st.selectbox(
+        "Modelo de reconocimiento",
+        options=list(opciones_modelo),
+        index=0,
+        help="Selecciona el modelo que analizara las fotografias.",
+    )
+
+    ruta_configuracion = (
+        PROJECT_ROOT / opciones_modelo[modelo_seleccionado]
+    )
+
     try:
-        configuration = load_model_configuration(MODEL_CONFIG_PATH, project_root=PROJECT_ROOT)
+        configuration = load_model_configuration(
+            ruta_configuracion,
+            project_root=PROJECT_ROOT,
+        )
     except (FileNotFoundError, RuntimeError, ValueError) as error:
         st.error(f"No se pudo cargar la configuracion: {error}")
         return
 
-    st.info(
-        "Alcance actual: el modelo reconoce guantes, gafas de seguridad y tapabocas. "
-        "La bata y el gorro todavia no son evaluables y no se declara incumplimiento por su ausencia."
-    )
+    if "modelo entrenado" in modelo_seleccionado:
+        st.info(
+            "Modelo LabGuard entrenado en Google Colab: "
+            "bata, guantes, gafas de seguridad, gorro y tapabocas. "
+            "Resultados experimentales sujetos a revision."
+        )
+    else:
+        st.info(
+            "Modelo original de Hugging Face: "
+            "guantes, gafas de seguridad y tapabocas. "
+            "Bata y gorro no son evaluables con este modelo."
+        )
 
     st.subheader("Ajustes de inferencia")
     confidence_column, size_column = st.columns(2)
@@ -269,7 +313,7 @@ def run() -> None:
         "Analisis individual por persona",
         value=False,
         help=(
-            "Detecta personas con yolov8n.pt y ejecuta el modelo EPP dentro de cada recorte. "
+            "Detecta personas y asocia los EPP encontrados en la imagen completa. "
             "Puede ser mas lento en CPU."
         ),
     )
@@ -315,7 +359,7 @@ def run() -> None:
                     detection
                     for analysis in person_result.people
                     for detection in analysis.detections
-                )
+                ) + person_result.unassigned_detections
                 annotated = annotate_image(original, individual_detections)
                 annotated = annotate_people(annotated, person_result.people)
             else:
@@ -339,7 +383,7 @@ def run() -> None:
     except FileNotFoundError as error:
         st.error(
             f"No se pudo cargar un modelo local: {error}. "
-            "Verifica models/best.pt y yolov8n.pt antes de analizar imagenes."
+            "Verifica las rutas de modelos configuradas antes de analizar imagenes."
         )
         return
     except Exception as error:

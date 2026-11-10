@@ -1,6 +1,6 @@
-"""Deteccion de personas con la clase person de COCO en YOLOv8n."""
+"""Deteccion de personas con una clase person de un modelo YOLO."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -19,7 +19,7 @@ class PersonDetector(Protocol):
 
 
 class YoloPersonDetector:
-    """Usa un checkpoint COCO local y limita la inferencia a la clase person."""
+    """Usa un checkpoint local y limita la inferencia a su clase person."""
 
     def __init__(
         self,
@@ -30,6 +30,7 @@ class YoloPersonDetector:
         iou_threshold: float = 0.45,
         image_size: int = 512,
         maximum_detections: int = 50,
+        person_class: str | int = "person",
         model_loader: ModelLoader | None = None,
     ) -> None:
         path = Path(model_path).expanduser()
@@ -43,6 +44,10 @@ class YoloPersonDetector:
             raise ValueError("iou_threshold debe estar entre 0 y 1")
         if image_size <= 0 or maximum_detections <= 0:
             raise ValueError("image_size y maximum_detections deben ser positivos")
+        if isinstance(person_class, str) and not person_class.strip():
+            raise ValueError("person_class no puede estar vacia")
+        if isinstance(person_class, int) and person_class < 0:
+            raise ValueError("person_class no puede ser negativa")
 
         self.model_path = path
         self.device = device
@@ -50,6 +55,7 @@ class YoloPersonDetector:
         self.iou_threshold = iou_threshold
         self.image_size = image_size
         self.maximum_detections = maximum_detections
+        self.person_class = person_class
         self._model_loader = model_loader or self._load_ultralytics_model
         self._model: Any | None = None
 
@@ -64,12 +70,31 @@ class YoloPersonDetector:
             self._model = self._model_loader(str(self.model_path))
         return self._model
 
+    def _person_class_id(self, model: Any) -> int:
+        if isinstance(self.person_class, int):
+            return self.person_class
+
+        names = getattr(model, "names", None)
+        if isinstance(names, Mapping):
+            for class_id, class_name in names.items():
+                if str(class_name) == self.person_class:
+                    return int(class_id)
+        elif isinstance(names, (list, tuple)):
+            for class_id, class_name in enumerate(names):
+                if str(class_name) == self.person_class:
+                    return class_id
+        raise ValueError(
+            f"El modelo {self.model_path} no contiene la clase '{self.person_class}'"
+        )
+
     def detect(self, image: object) -> list[PersonDetection]:
         prepared_image = prepare_opencv_image(image)
-        results = self._get_model().predict(
+        model = self._get_model()
+        person_class_id = self._person_class_id(model)
+        results = model.predict(
             source=prepared_image,
             device=self.device,
-            classes=[0],
+            classes=[person_class_id],
             conf=self.confidence_threshold,
             iou=self.iou_threshold,
             imgsz=self.image_size,

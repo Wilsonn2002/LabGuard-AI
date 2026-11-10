@@ -1,7 +1,5 @@
 """Analisis de EPP independiente para cada persona de una fotografia."""
 
-from dataclasses import dataclass
-
 import numpy as np
 
 from labguard_ai.core import (
@@ -14,12 +12,6 @@ from labguard_ai.core import (
     PpeType,
 )
 from labguard_ai.detection import PersonDetector, PpeDetector
-
-
-@dataclass(frozen=True, slots=True)
-class _Candidate:
-    person_index: int
-    detection: Detection
 
 
 def _area(box: tuple[int, int, int, int]) -> int:
@@ -35,38 +27,37 @@ def _intersection_area(
     return width * height
 
 
-def _same_object(first: Detection, second: Detection, iou_threshold: float) -> bool:
-    if first.item != second.item:
-        return False
-    intersection = _intersection_area(first.bounding_box, second.bounding_box)
-    if intersection == 0:
-        return False
-    first_area = _area(first.bounding_box)
-    second_area = _area(second.bounding_box)
-    union = first_area + second_area - intersection
-    iou = intersection / union if union else 0.0
-    smaller_area = min(first_area, second_area)
-    overlap_of_smaller = intersection / smaller_area if smaller_area else 0.0
-    return iou >= iou_threshold or overlap_of_smaller >= 0.80
+def _association_score(
+    detection: Detection,
+    person: PersonDetection,
+) -> tuple[float, float] | None:
+    intersection = _intersection_area(detection.bounding_box, person.bounding_box)
+    detection_area = _area(detection.bounding_box)
+    if intersection == 0 or detection_area == 0:
+        return None
+
+    detection_x = (detection.bounding_box[0] + detection.bounding_box[2]) / 2
+    detection_y = (detection.bounding_box[1] + detection.bounding_box[3]) / 2
+    person_x = (person.bounding_box[0] + person.bounding_box[2]) / 2
+    person_y = (person.bounding_box[1] + person.bounding_box[3]) / 2
+    center_distance_squared = (
+        (detection_x - person_x) ** 2 + (detection_y - person_y) ** 2
+    )
+    return intersection / detection_area, -center_distance_squared
 
 
 class PersonPpeAnalyzer:
-    """Recorta cada persona, detecta EPP y resuelve duplicados entre recortes."""
+    """Detecta sobre la imagen completa y asocia cada EPP con una persona."""
 
     def __init__(
         self,
         person_detector: PersonDetector,
         ppe_detector: PpeDetector,
         supported_items: set[PpeType] | frozenset[PpeType],
-        *,
-        duplicate_iou_threshold: float = 0.50,
     ) -> None:
-        if not 0.0 <= duplicate_iou_threshold <= 1.0:
-            raise ValueError("duplicate_iou_threshold debe estar entre 0 y 1")
         self.person_detector = person_detector
         self.ppe_detector = ppe_detector
         self.supported_items = frozenset(supported_items)
-        self.duplicate_iou_threshold = duplicate_iou_threshold
 
     @staticmethod
     def _clip_person(
@@ -84,23 +75,21 @@ class PersonPpeAnalyzer:
         return PersonDetection(person.person_id, person.confidence, (x1, y1, x2, y2))
 
     @staticmethod
-    def _translate_detection(
+    def _clip_detection(
         detection: Detection,
-        offset_x: int,
-        offset_y: int,
         image_width: int,
         image_height: int,
     ) -> Detection | None:
         x1, y1, x2, y2 = detection.bounding_box
-        translated = (
-            min(max(x1 + offset_x, 0), image_width),
-            min(max(y1 + offset_y, 0), image_height),
-            min(max(x2 + offset_x, 0), image_width),
-            min(max(y2 + offset_y, 0), image_height),
+        clipped = (
+            min(max(x1, 0), image_width),
+            min(max(y1, 0), image_height),
+            min(max(x2, 0), image_width),
+            min(max(y2, 0), image_height),
         )
-        if translated[2] <= translated[0] or translated[3] <= translated[1]:
+        if clipped[2] <= clipped[0] or clipped[3] <= clipped[1]:
             return None
-        return Detection(detection.item, detection.confidence, translated)
+        return Detection(detection.item, detection.confidence, clipped)
 
     def analyze(self, image: object) -> PersonAnalysisResult:
         if not isinstance(image, np.ndarray):
@@ -114,42 +103,31 @@ class PersonPpeAnalyzer:
             for person in self.person_detector.detect(image)
             if (clipped := self._clip_person(person, image_width, image_height)) is not None
         )
-        candidates: list[_Candidate] = []
-
-        for person_index, person in enumerate(people):
-            x1, y1, x2, y2 = person.bounding_box
-            crop = np.ascontiguousarray(image[y1:y2, x1:x2])
-            for local_detection in self.ppe_detector.detect(crop):
-                translated = self._translate_detection(
-                    local_detection,
-                    x1,
-                    y1,
+        detections_by_person: list[list[Detection]] = [[] for _ in people]
+        unassigned_detections: list[Detection] = []
+        detections = (
+            clipped
+            for detection in self.ppe_detector.detect(image)
+            if (
+                clipped := self._clip_detection(
+                    detection,
                     image_width,
                     image_height,
                 )
-                if translated is not None:
-                    candidates.append(_Candidate(person_index, translated))
-
-        accepted: list[_Candidate] = []
-        for candidate in sorted(
-            candidates,
-            key=lambda item: item.detection.confidence,
-            reverse=True,
-        ):
-            if any(
-                _same_object(
-                    candidate.detection,
-                    existing.detection,
-                    self.duplicate_iou_threshold,
-                )
-                for existing in accepted
-            ):
+            )
+            is not None
+        )
+        for detection in detections:
+            scored_people = (
+                (score, person_index)
+                for person_index, person in enumerate(people)
+                if (score := _association_score(detection, person)) is not None
+            )
+            best_match = max(scored_people, default=None)
+            if best_match is None:
+                unassigned_detections.append(detection)
                 continue
-            accepted.append(candidate)
-
-        detections_by_person: list[list[Detection]] = [[] for _ in people]
-        for candidate in accepted:
-            detections_by_person[candidate.person_index].append(candidate.detection)
+            detections_by_person[best_match[1]].append(detection)
 
         analyses: list[PersonAnalysis] = []
         for person, detections in zip(people, detections_by_person, strict=True):
@@ -175,4 +153,7 @@ class PersonPpeAnalyzer:
                 )
             )
 
-        return PersonAnalysisResult(people=tuple(analyses))
+        return PersonAnalysisResult(
+            people=tuple(analyses),
+            unassigned_detections=tuple(unassigned_detections),
+        )
