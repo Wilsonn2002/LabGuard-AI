@@ -1,5 +1,6 @@
 """Interfaz Streamlit para analizar fotografias de laboratorio."""
-
+import tempfile
+import cv2
 from pathlib import Path
 
 from labguard_ai.config import ModelConfiguration, load_model_configuration
