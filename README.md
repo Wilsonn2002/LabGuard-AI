@@ -219,4 +219,31 @@ un modelo específicamente entrenado y validado para estas categorías.
 ### Video de presentación
 
 Enlace: pendiente de publicación.
+## Arquitectura de detección de personas y EPP
+
+LabGuard AI incorpora una arquitectura de visión artificial basada en dos modelos YOLOv8 especializados:
+
+- **YOLOv8n COCO:** encargado de identificar las personas presentes en las fotografías de laboratorio.
+- **LabGuard AI:** modelo entrenado para detectar bata, guantes protectores, gafas de seguridad, gorro de laboratorio y tapabocas.
+
+### Comparación experimental
+
+Se realizó una prueba utilizando una fotografía con dos personas. Ambos modelos detectaron correctamente las dos personas, obteniendo las siguientes puntuaciones de confianza:
+
+| Modelo | Persona 1 | Persona 2 |
+|---|---:|---:|
+| LabGuard AI | 77,3 % | 58,8 % |
+| YOLOv8n COCO | 93,4 % | 92,4 % |
+
+Estos resultados motivaron la separación del detector de personas y el detector de elementos de protección personal, con el objetivo de mejorar el análisis individual.
+
+### Entrenamiento acelerado con CUDA
+
+El modelo propio fue entrenado en Google Colab utilizando una GPU NVIDIA Tesla T4, PyTorch y CUDA. El dataset consolidado contiene 2.593 imágenes, distribuidas en entrenamiento, validación y prueba.
+
+### Mejoras de la aplicación
+
+La interfaz desarrollada en Streamlit permite seleccionar el modelo de reconocimiento, ajustar la confianza y resolución de inferencia, cargar fotografías y visualizar los resultados individuales por persona.
+
+El sistema es experimental y requiere supervisión humana. Las detecciones no constituyen por sí solas una certificación de cumplimiento de seguridad.
 
